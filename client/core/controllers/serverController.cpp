@@ -634,7 +634,7 @@ std::shared_ptr<ContainerDiagnostics> ServerController::getContainerDiagnostics(
         // Single script — runs all checks and outputs labeled lines
         QString script =
                 QString(
-                        // 1. Port reachable — check if mtproto-proxy is listening on port 443 inside container
+                        // 1. Port reachable — same port as -H in start.sh / host publish mapping
                         "PORT_OK=$(sudo docker exec amnezia-mtproxy sh -c 'ss -tlnp 2>/dev/null | grep -q :%1 && echo "
                         "yes || echo no' 2>/dev/null || echo no); "
                         // 2. Telegram upstream — try to reach Telegram config endpoint
