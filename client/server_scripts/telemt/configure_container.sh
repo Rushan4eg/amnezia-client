@@ -1,6 +1,7 @@
 #!/bin/sh
-set -e
+# Do not use set -e: Telemt / curl / kill edge cases should not abort the whole configure step.
 
+echo "[*] Amnezia Telemt: configure script start"
 mkdir -p /data/tlsfront
 
 # Build config.toml (variables substituted on the host by Amnezia before upload)
@@ -33,7 +34,8 @@ rm -f /data/config.toml
     echo "[server.api]"
     echo "enabled = true"
     echo "listen = \"0.0.0.0:9091\""
-    echo "whitelist = [\"0.0.0.0/0\", \"127.0.0.0/8\"]"
+    # Match upstream Telemt default: localhost API only (curl in this script uses 127.0.0.1).
+    echo "whitelist = [\"127.0.0.0/8\"]"
     echo ""
     echo "[[server.listeners]]"
     echo "ip = \"0.0.0.0\""
@@ -51,36 +53,10 @@ rm -f /data/config.toml
 echo "$TELEMT_SECRET" > /data/.amnezia-secret
 chmod 600 /data/.amnezia-secret 2>/dev/null || true
 
-# Brief run to fetch canonical links from HTTP API (see telemt docs/API.md)
-/usr/local/bin/telemt /data/config.toml >/tmp/telemt-amnezia-cfg.log 2>&1 &
-TPID=$!
-
-TG_LINK=""
-for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    if curl -sf "http://127.0.0.1:9091/v1/users" -o /tmp/telemt-users.json 2>/dev/null; then
-        TG_LINK=$(jq -r '(.[0].links.tls // [])[0] // empty' /tmp/telemt-users.json 2>/dev/null || true)
-        if [ -z "$TG_LINK" ]; then
-            TG_LINK=$(jq -r '(.[0].links.secure // [])[0] // empty' /tmp/telemt-users.json 2>/dev/null || true)
-        fi
-        if [ -z "$TG_LINK" ]; then
-            TG_LINK=$(jq -r '(.[0].links.classic // [])[0] // empty' /tmp/telemt-users.json 2>/dev/null || true)
-        fi
-        if [ -n "$TG_LINK" ]; then
-            break
-        fi
-    fi
-    sleep 1
-done
-
-kill "$TPID" 2>/dev/null || true
-wait "$TPID" 2>/dev/null || true
-
-TME_LINK=""
-if [ -n "$TG_LINK" ]; then
-    TME_LINK=$(echo "$TG_LINK" | sed 's|^tg://proxy?|https://t.me/proxy?|')
-fi
-
+# Do not start telemt here: a long-lived process + curl loop inside `docker exec` can confuse SSH/Docker
+# timing and is unnecessary — start.sh runs telemt after configure. Links can be empty until the service
+# is up; the client still parses Secret below.
 echo "[*] Telemt configuration"
 echo "[*] Secret:    $TELEMT_SECRET"
-echo "[*] tg:// link:   $TG_LINK"
-echo "[*] t.me link:    $TME_LINK"
+echo "[*] tg:// link:   "
+echo "[*] t.me link:    "

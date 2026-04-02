@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLoggingCategory>
+#include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QPointer>
 #include <QTemporaryFile>
 #include <QThread>
@@ -24,6 +26,7 @@
 
 #include "containers/containers_defs.h"
 #include "core/networkUtilities.h"
+#include "protocols/protocols_defs.h"
 #include "core/scripts_registry.h"
 #include "core/server_defs.h"
 #include "logger.h"
@@ -34,6 +37,42 @@
 namespace
 {
     Logger logger("ServerController");
+
+    void ensureTelemtHasValidSecret(QJsonObject &config)
+    {
+        const QString protoKey = ProtocolProps::protoToString(Proto::Telemt);
+        QJsonObject proto = config.value(protoKey).toObject();
+        const QString secret = proto.value(protocols::telemt::secretKey).toString();
+        static const QRegularExpression hex32(QStringLiteral("^[0-9a-fA-F]{32}$"));
+        if (hex32.match(secret).hasMatch()) {
+            return;
+        }
+        QString s;
+        for (int i = 0; i < 16; ++i) {
+            s += QStringLiteral("%1").arg(QRandomGenerator::global()->bounded(256), 2, 16, QLatin1Char('0'));
+        }
+        proto.insert(protocols::telemt::secretKey, s);
+        config.insert(protoKey, proto);
+    }
+
+    /**
+     * Only treat as "container missing" when Docker CLI clearly refers to this container, or the captured
+     * output is short (daemon error only). Avoid matching random log lines from services inside the container.
+     */
+    bool dockerDaemonContainerMissing(const QString &out, const QString &containerDockerName)
+    {
+        if (!out.contains(QLatin1String("Error response from daemon"), Qt::CaseInsensitive)) {
+            return false;
+        }
+        if (out.contains(QLatin1String("No such container"), Qt::CaseInsensitive)
+            && out.contains(containerDockerName, Qt::CaseInsensitive)) {
+            return true;
+        }
+        if (out.size() < 700 && out.contains(QLatin1String("is not running"), Qt::CaseInsensitive)) {
+            return true;
+        }
+        return false;
+    }
 }
 
 ServerController::ServerController(std::shared_ptr<Settings> settings, QObject *parent) : m_settings(settings)
@@ -564,6 +603,10 @@ ErrorCode ServerController::runContainerWorker(const ServerCredentials &credenti
 
 ErrorCode ServerController::configureContainerWorker(const ServerCredentials &credentials, DockerContainer container, QJsonObject &config)
 {
+    if (container == DockerContainer::Telemt) {
+        ensureTelemtHasValidSecret(config);
+    }
+
     QString stdOut;
     auto cbReadStdOut = [&](const QString &data, libssh::Client &) {
         stdOut += data + "\n";
@@ -583,10 +626,9 @@ ErrorCode ServerController::configureContainerWorker(const ServerCredentials &cr
         return e;
     }
 
-    // docker exec succeeds at SSH level even if the container is stopped —
-    // detect this by checking the output for docker daemon error messages.
-    if (stdOut.contains("is not running") || stdOut.contains("No such container")) {
-        qDebug() << "configureContainerWorker: container not running, stdout:" << stdOut;
+    // docker exec can return success at SSH level while Docker CLI prints a daemon error to stderr.
+    if (dockerDaemonContainerMissing(stdOut, ContainerProps::containerToString(container))) {
+        qDebug() << "configureContainerWorker: Docker daemon reports container missing/stopped, output:" << stdOut;
         return ErrorCode::ServerContainerMissingError;
     }
 

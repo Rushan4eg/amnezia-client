@@ -10,15 +10,17 @@ RUN apt-get update \
         ca-certificates \
         curl \
         jq \
+        openssl \
         tar \
     && rm -rf /var/lib/apt/lists/*
 
-ARG TARGETARCH
+# Use machine arch (works with classic `docker build`; TARGETARCH is only set with BuildKit).
 RUN set -eux; \
-    case "${TARGETARCH}" in \
-        amd64) ASSET="telemt-x86_64-linux-musl.tar.gz" ;; \
-        arm64) ASSET="telemt-aarch64-linux-musl.tar.gz" ;; \
-        *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    ARCH="$(uname -m)"; \
+    case "$ARCH" in \
+        x86_64) ASSET="telemt-x86_64-linux-musl.tar.gz" ;; \
+        aarch64|arm64) ASSET="telemt-aarch64-linux-musl.tar.gz" ;; \
+        *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
     esac; \
     curl -fL --retry 5 --retry-delay 3 --connect-timeout 10 --max-time 120 \
         -o "/tmp/${ASSET}" "https://github.com/telemt/telemt/releases/latest/download/${ASSET}"; \

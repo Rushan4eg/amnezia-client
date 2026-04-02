@@ -260,7 +260,8 @@ PageType {
                     } else if (mode === "padded") {
                         return "dd" + secret
                     }
-                    return secret
+                    // Telemt default (secure MTProto, not FakeTLS): Telegram proxy links require dd + hex secret
+                    return "dd" + secret
                 }
 
                 property int secretTabIndex: root.syncedSecretTabIndex
