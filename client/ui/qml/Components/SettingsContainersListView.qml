@@ -54,6 +54,11 @@ ListViewType {
                         PageController.goToPage(PageEnum.PageServiceMtProxySettings)
                         break
                     }
+                    case ContainerEnum.Telemt: {
+                        TelemtConfigModel.updateModel(config)
+                        PageController.goToPage(PageEnum.PageServiceTelemtSettings)
+                        break
+                    }
                     default: {
                         ProtocolsModel.updateModel(config)
                         PageController.goToPage(PageEnum.PageSettingsServerProtocol)

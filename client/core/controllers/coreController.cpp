@@ -88,6 +88,9 @@ void CoreController::initModels()
     m_mtProxyConfigModel.reset(new MtProxyConfigModel(this));
     m_engine->rootContext()->setContextProperty("MtProxyConfigModel", m_mtProxyConfigModel.get());
 
+    m_telemtConfigModel.reset(new TelemtConfigModel(this));
+    m_engine->rootContext()->setContextProperty("TelemtConfigModel", m_telemtConfigModel.get());
+
     m_clientManagementModel.reset(new ClientManagementModel(m_settings, this));
     m_engine->rootContext()->setContextProperty("ClientManagementModel", m_clientManagementModel.get());
 

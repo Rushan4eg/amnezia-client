@@ -102,6 +102,7 @@ PageLoader::PageEnum ProtocolsModel::serverProtocolPage(Proto protocol) const
     case Proto::Sftp: return PageLoader::PageEnum::PageServiceSftpSettings;
     case Proto::Socks5Proxy: return PageLoader::PageEnum::PageServiceSocksProxySettings;
     case Proto::MtProxy: return PageLoader::PageEnum::PageServiceMtProxySettings;
+    case Proto::Telemt: return PageLoader::PageEnum::PageServiceTelemtSettings;
     default: return PageLoader::PageEnum::PageProtocolOpenVpnSettings;
     }
 }

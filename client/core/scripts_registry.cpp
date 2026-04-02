@@ -21,6 +21,7 @@ QString amnezia::scriptFolder(amnezia::DockerContainer container)
     case DockerContainer::Sftp: return QLatin1String("sftp");
     case DockerContainer::Socks5Proxy: return QLatin1String("socks5_proxy");
     case DockerContainer::MtProxy: return QLatin1String("mtproxy");
+    case DockerContainer::Telemt: return QLatin1String("telemt");
     default: return QString();
     }
 }

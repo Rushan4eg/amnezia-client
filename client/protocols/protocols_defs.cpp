@@ -80,7 +80,8 @@ QMap<amnezia::Proto, QString> ProtocolProps::protocolHumanNames()
              { Proto::Dns, "DNS Service" },
              { Proto::Sftp, QObject::tr("SFTP service") },
              { Proto::Socks5Proxy, QObject::tr("SOCKS5 proxy server") },
-             { Proto::MtProxy, QObject::tr("MTProxy (Telegram)") } };
+             { Proto::MtProxy, QObject::tr("MTProxy (Telegram)") },
+             { Proto::Telemt, QObject::tr("Telemt (Telegram)") } };
 }
 
 QMap<amnezia::Proto, QString> ProtocolProps::protocolDescriptions()
@@ -107,6 +108,7 @@ amnezia::ServiceType ProtocolProps::protocolService(Proto p)
     case Proto::Sftp: return ServiceType::Other;
     case Proto::Socks5Proxy: return ServiceType::Other;
     case Proto::MtProxy: return ServiceType::Other;
+    case Proto::Telemt: return ServiceType::Other;
     default: return ServiceType::Other;
     }
 }
@@ -121,6 +123,7 @@ int ProtocolProps::getPortForInstall(Proto p)
     case Socks5Proxy:
         return QRandomGenerator::global()->bounded(30000, 50000);
     case MtProxy:
+    case Telemt:
     default:
         return defaultPort(p);
     }
@@ -144,6 +147,7 @@ int ProtocolProps::defaultPort(Proto p)
     case Proto::Sftp: return 222;
     case Proto::Socks5Proxy: return 38080;
     case Proto::MtProxy: return QString(protocols::mtProxy::defaultPort).toInt();
+    case Proto::Telemt: return QString(protocols::telemt::defaultPort).toInt();
     default: return -1;
     }
 }
@@ -166,6 +170,7 @@ bool ProtocolProps::defaultPortChangeable(Proto p)
     case Proto::Sftp: return true;
     case Proto::Socks5Proxy: return true;
     case Proto::MtProxy: return true;
+    case Proto::Telemt: return true;
     default: return false;
     }
 }
@@ -189,6 +194,7 @@ TransportProto ProtocolProps::defaultTransportProto(Proto p)
     case Proto::Sftp: return TransportProto::Tcp;
     case Proto::Socks5Proxy: return TransportProto::Tcp;
     case Proto::MtProxy: return TransportProto::Tcp;
+    case Proto::Telemt: return TransportProto::Tcp;
     }
 }
 
@@ -211,9 +217,9 @@ bool ProtocolProps::defaultTransportProtoChangeable(Proto p)
     case Proto::Sftp: return false;
     case Proto::Socks5Proxy: return false;
     case Proto::MtProxy: return false;
+    case Proto::Telemt: return false;
     default: return false;
     }
-    return false;
 }
 
 QString ProtocolProps::key_proto_config_data(Proto p)

@@ -31,7 +31,8 @@ namespace amnezia
             Dns,
             Sftp,
             Socks5Proxy,
-            MtProxy
+            MtProxy,
+            Telemt
         };
         Q_ENUM_NS(DockerContainer)
     } // namespace ContainerEnumNS

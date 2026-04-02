@@ -120,6 +120,7 @@ PageType {
                     case ProtocolEnum.Ipsec: Ikev2ConfigModel.updateModel(ProtocolsModel.getConfig()); break;
                     case ProtocolEnum.Socks5Proxy: Socks5ProxyConfigModel.updateModel(ProtocolsModel.getConfig()); break;
                     case ProtocolEnum.MtProxy: MtProxyConfigModel.updateModel(ProtocolsModel.getConfig()); break;
+                    case ProtocolEnum.Telemt: TelemtConfigModel.updateModel(ProtocolsModel.getConfig()); break;
                     }
                     PageController.goToPage(serverProtocolPage);
                 }

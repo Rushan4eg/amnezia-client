@@ -10,6 +10,7 @@
 #include <QtConcurrent>
 
 #include "core/diagnostics/mtProxyDiagnostics.h"
+#include "core/diagnostics/telemtDiagnostics.h"
 
 #include "core/api/apiUtils.h"
 #include "core/controllers/serverController.h"
@@ -539,6 +540,26 @@ ErrorCode InstallController::getAlreadyInstalledContainers(const ServerCredentia
                         if (mTmeLink.hasMatch()) {
                             containerConfig.insert(protocols::mtProxy::tmeLinkKey, mTmeLink.captured(1));
                         }
+                    } else if (protocol == Proto::Telemt) {
+                        static const QRegularExpression reSecret(R"(\[\*\]\s+Secret:\s+([0-9a-f]{32}))",
+                                                                 QRegularExpression::CaseInsensitiveOption);
+                        static const QRegularExpression reTgLink(R"(\[\*\]\s+tg://\s+link:\s+(tg://proxy\?[^\s]+))");
+                        static const QRegularExpression reTmeLink(
+                                R"(\[\*\]\s+t\.me\s+link:\s+(https://t\.me/proxy\?[^\s]+))");
+
+                        auto mSecret = reSecret.match(stdOut);
+                        auto mTgLink = reTgLink.match(stdOut);
+                        auto mTmeLink = reTmeLink.match(stdOut);
+
+                        if (mSecret.hasMatch()) {
+                            containerConfig.insert(protocols::telemt::secretKey, mSecret.captured(1));
+                        }
+                        if (mTgLink.hasMatch()) {
+                            containerConfig.insert(protocols::telemt::tgLinkKey, mTgLink.captured(1));
+                        }
+                        if (mTmeLink.hasMatch()) {
+                            containerConfig.insert(protocols::telemt::tmeLinkKey, mTmeLink.captured(1));
+                        }
                     } else if (protocol == Proto::Xray) {
                         QString currentConfig = serverController->getTextFileFromContainer(
                                 container, credentials, amnezia::protocols::xray::serverConfigPath, errorCode);
@@ -815,7 +836,8 @@ void InstallController::removeProcessedContainer()
 void InstallController::setContainerEnabled(DockerContainer container, bool enabled)
 {
     switch (container) {
-    case ContainerEnumNS::MtProxy: {
+    case ContainerEnumNS::MtProxy:
+    case ContainerEnumNS::Telemt: {
         int serverIndex = m_serversModel->getProcessedServerIndex();
         ServerCredentials serverCredentials =
                 qvariant_cast<ServerCredentials>(m_serversModel->data(serverIndex, ServersModel::Roles::CredentialsRole));
@@ -853,7 +875,8 @@ void InstallController::setContainerEnabled(DockerContainer container, bool enab
 void InstallController::refreshContainerStatus(DockerContainer container)
 {
     switch (container) {
-    case ContainerEnumNS::MtProxy: {
+    case ContainerEnumNS::MtProxy:
+    case ContainerEnumNS::Telemt: {
         int serverIndex = m_serversModel->getProcessedServerIndex();
         ServerCredentials serverCredentials =
                 qvariant_cast<ServerCredentials>(m_serversModel->data(serverIndex, ServersModel::Roles::CredentialsRole));
@@ -879,7 +902,8 @@ void InstallController::refreshContainerStatus(DockerContainer container)
 void InstallController::refreshContainerDiagnostics(DockerContainer container, int port)
 {
     switch (container) {
-    case DockerContainer::MtProxy: {
+    case DockerContainer::MtProxy:
+    case DockerContainer::Telemt: {
         int serverIndex = m_serversModel->getProcessedServerIndex();
         ServerCredentials serverCredentials =
                 qvariant_cast<ServerCredentials>(m_serversModel->data(serverIndex, ServersModel::Roles::CredentialsRole));
@@ -893,11 +917,14 @@ void InstallController::refreshContainerDiagnostics(DockerContainer container, i
 
         auto *watcher = new QFutureWatcher<std::shared_ptr<ContainerDiagnostics>>(this);
         connect(watcher, &QFutureWatcher<std::shared_ptr<ContainerDiagnostics>>::finished, this, [this, watcher]() {
-            auto base = watcher->result().get();
-            if (auto *diag = static_cast<MtProxyDiagnostics *>(base)) {
+            auto *base = watcher->result().get();
+            if (auto *diag = dynamic_cast<MtProxyDiagnostics *>(base)) {
                 emit containerDiagnosticsRefreshed(diag->portReachable, diag->upstreamReachable,
                                                    diag->clientsConnected, diag->lastConfigRefresh,
                                                    diag->statsEndpoint);
+            } else if (auto *diag = dynamic_cast<TelemtDiagnostics *>(base)) {
+                emit containerDiagnosticsRefreshed(diag->portReachable, diag->upstreamReachable,
+                                                 diag->clientsConnected, diag->lastConfigRefresh, diag->statsEndpoint);
             }
             watcher->deleteLater();
         });
@@ -913,7 +940,8 @@ void InstallController::refreshContainerDiagnostics(DockerContainer container, i
 void InstallController::fetchContainerSecret(DockerContainer container)
 {
     switch (container) {
-    case DockerContainer::MtProxy: {
+    case DockerContainer::MtProxy:
+    case DockerContainer::Telemt: {
         int serverIndex = m_serversModel->getProcessedServerIndex();
         ServerCredentials serverCredentials =
                 qvariant_cast<ServerCredentials>(m_serversModel->data(serverIndex, ServersModel::Roles::CredentialsRole));

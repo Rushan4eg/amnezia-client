@@ -104,8 +104,9 @@ ErrorCode ServerController::runContainerScript(const ServerCredentials &credenti
     if (e)
         return e;
 
-    QString runner =
-            QString("sudo docker exec -i $CONTAINER_NAME %2 %1 ").arg(fileName, (container == DockerContainer::Socks5Proxy || container == DockerContainer::MtProxy ? "sh" : "bash"));
+    QString runner = QString("sudo docker exec -i $CONTAINER_NAME %2 %1 ")
+                    .arg(fileName, (container == DockerContainer::Socks5Proxy || container == DockerContainer::MtProxy || container == DockerContainer::Telemt
+                    ? "sh" : "bash"));
     e = runScript(credentials, replaceVars(runner, genVarsForScript(credentials, container)), cbReadStdOut, cbReadStdErr);
 
     QString remover = QString("sudo docker exec -i $CONTAINER_NAME rm %1 ").arg(fileName);
@@ -406,6 +407,43 @@ bool ServerController::isReinstallContainerRequired(DockerContainer container, c
         return false;
     }
 
+    if (container == DockerContainer::Telemt) {
+        const QJsonObject &oldProto = oldConfig.value(ProtocolProps::protoToString(Proto::Telemt)).toObject();
+        const QJsonObject &newProto = newConfig.value(ProtocolProps::protoToString(Proto::Telemt)).toObject();
+        if (oldProto.value(config_key::port).toString(protocols::telemt::defaultPort)
+            != newProto.value(config_key::port).toString(protocols::telemt::defaultPort)) {
+            return true;
+        }
+        if (oldProto.value(protocols::telemt::transportModeKey).toString(protocols::telemt::transportModeStandard)
+            != newProto.value(protocols::telemt::transportModeKey).toString(protocols::telemt::transportModeStandard)) {
+            return true;
+        }
+        if (oldProto.value(protocols::telemt::tlsDomainKey).toString()
+            != newProto.value(protocols::telemt::tlsDomainKey).toString()) {
+            return true;
+        }
+        if (oldProto.value(protocols::telemt::maskEnabledKey).toBool(true)
+            != newProto.value(protocols::telemt::maskEnabledKey).toBool(true)) {
+            return true;
+        }
+        if (oldProto.value(protocols::telemt::tlsEmulationKey).toBool(false)
+            != newProto.value(protocols::telemt::tlsEmulationKey).toBool(false)) {
+            return true;
+        }
+        if (oldProto.value(protocols::telemt::useMiddleProxyKey).toBool(true)
+            != newProto.value(protocols::telemt::useMiddleProxyKey).toBool(true)) {
+            return true;
+        }
+        if (oldProto.value(protocols::telemt::tagKey).toString() != newProto.value(protocols::telemt::tagKey).toString()) {
+            return true;
+        }
+        if (oldProto.value(protocols::telemt::userNameKey).toString(protocols::telemt::defaultUserName)
+            != newProto.value(protocols::telemt::userNameKey).toString(protocols::telemt::defaultUserName)) {
+            return true;
+        }
+        return false;
+    }
+
     if (container == DockerContainer::Xray) {
         if (oldProtoConfig.value(config_key::port).toString(protocols::xray::defaultPort)
             != newProtoConfig.value(config_key::port).toString(protocols::xray::defaultPort)) {
@@ -592,7 +630,8 @@ ServerController::ContainerStatus ServerController::getContainerStatus(const Ser
                                                                        DockerContainer container)
 {
     switch (container) {
-    case ContainerEnumNS::MtProxy: {
+    case ContainerEnumNS::MtProxy:
+    case ContainerEnumNS::Telemt: {
         QString stdOut;
         auto cbReadStdOut = [&](const QString &data, libssh::Client &) {
             stdOut += data;
@@ -681,6 +720,59 @@ std::shared_ptr<ContainerDiagnostics> ServerController::getContainerDiagnostics(
         }
         return diag;
     }
+    case DockerContainer::Telemt: {
+        auto diag = std::make_unique<TelemtDiagnostics>();
+        QString scriptTemplate =
+                QString(
+                        "PORT_OK=$(sudo docker exec $CONTAINER_NAME sh -c 'ss -tlnp 2>/dev/null | grep -q :%1 && echo "
+                        "yes || echo no' 2>/dev/null || echo no); "
+                        "TG_OK=$(curl -s --max-time 5 -o /dev/null -w '%%{http_code}' "
+                        "https://core.telegram.org/getProxySecret 2>/dev/null | grep -q '200' && echo yes || echo no); "
+                        "API_OK=$(sudo docker exec $CONTAINER_NAME sh -c 'curl -sf --max-time 3 http://127.0.0.1:9091/v1/users >/dev/null && echo yes || echo no' 2>/dev/null || echo no); "
+                        "CONF_TIME=$(sudo docker exec $CONTAINER_NAME sh -c 'stat -c \"%y\" /data/config.toml "
+                        "2>/dev/null | cut -d. -f1' 2>/dev/null || echo unknown); "
+                        "echo \"PORT_OK=${PORT_OK}\"; "
+                        "echo \"TG_OK=${TG_OK}\"; "
+                        "echo \"API_OK=${API_OK}\"; "
+                        "echo \"CLIENTS=0\"; "
+                        "echo \"CONF_TIME=${CONF_TIME}\"; "
+                        "echo \"STATS=http://127.0.0.1:9091/v1/users\";")
+                        .arg(port);
+
+        QString script = replaceVars(scriptTemplate, genVarsForScript(credentials, container));
+
+        QString stdOut;
+        auto cbReadStdOut = [&](const QString &data, libssh::Client &) {
+            stdOut += data;
+            return ErrorCode::NoError;
+        };
+
+        ErrorCode e = runScript(credentials, script, cbReadStdOut);
+        if (e != ErrorCode::NoError) {
+            return diag;
+        }
+
+        diag->available = true;
+        bool tgOk = false;
+        bool apiOk = false;
+        for (const QString &line : stdOut.split("\n")) {
+            if (line.startsWith("PORT_OK=")) {
+                diag->portReachable = line.mid(8).trimmed() == "yes";
+            } else if (line.startsWith("TG_OK=")) {
+                tgOk = line.mid(6).trimmed() == "yes";
+            } else if (line.startsWith("API_OK=")) {
+                apiOk = line.mid(7).trimmed() == "yes";
+            } else if (line.startsWith("CLIENTS=")) {
+                diag->clientsConnected = line.mid(8).trimmed().toInt();
+            } else if (line.startsWith("CONF_TIME=")) {
+                diag->lastConfigRefresh = line.mid(10).trimmed();
+            } else if (line.startsWith("STATS=")) {
+                diag->statsEndpoint = line.mid(6).trimmed();
+            }
+        }
+        diag->upstreamReachable = tgOk && apiOk;
+        return diag;
+    }
     default: {
         return std::make_unique<ContainerDiagnostics>();
     }
@@ -697,6 +789,21 @@ QString ServerController::fetchContainerSecret(const ServerCredentials &credenti
             return ErrorCode::NoError;
         };
         ErrorCode errorCode = runScript(credentials, "sudo docker exec amnezia-mtproxy cat /data/secret", cbReadStdOut);
+        if (errorCode != ErrorCode::NoError) {
+            return QString();
+        }
+
+        return stdOut.trimmed();
+    }
+    case DockerContainer::Telemt: {
+        QString stdOut;
+        auto cbReadStdOut = [&](const QString &data, libssh::Client &) {
+            stdOut += data;
+            return ErrorCode::NoError;
+        };
+        QString script = replaceVars(QStringLiteral("sudo docker exec $CONTAINER_NAME cat /data/.amnezia-secret 2>/dev/null"),
+                                     genVarsForScript(credentials, container));
+        ErrorCode errorCode = runScript(credentials, script, cbReadStdOut);
         if (errorCode != ErrorCode::NoError) {
             return QString();
         }
@@ -721,6 +828,7 @@ ServerController::Vars ServerController::genVarsForScript(const ServerCredential
     const QJsonObject &sftpConfig = config.value(ProtocolProps::protoToString(Proto::Sftp)).toObject();
     const QJsonObject &socks5ProxyConfig = config.value(ProtocolProps::protoToString(Proto::Socks5Proxy)).toObject();
     const QJsonObject &mtProxyConfig = config.value(ProtocolProps::protoToString(Proto::MtProxy)).toObject();
+    const QJsonObject &telemtConfig = config.value(ProtocolProps::protoToString(Proto::Telemt)).toObject();
 
     Vars vars;
 
@@ -876,6 +984,31 @@ ServerController::Vars ServerController::genVarsForScript(const ServerCredential
     vars.append({ { "$MTPROXY_NAT_ENABLED",     natEnabled ? "1" : "0" } });
     vars.append({ { "$MTPROXY_NAT_INTERNAL_IP", mtProxyConfig.value(protocols::mtProxy::natInternalIpKey).toString("") } });
     vars.append({ { "$MTPROXY_NAT_EXTERNAL_IP", mtProxyConfig.value(protocols::mtProxy::natExternalIpKey).toString("") } });
+
+    {
+        const QString transport =
+                telemtConfig.value(protocols::telemt::transportModeKey).toString(protocols::telemt::transportModeStandard);
+        const bool faketls = (transport == protocols::telemt::transportModeFakeTLS);
+        vars.append({ { "$TELEMT_TOML_SECURE", faketls ? "false" : "true" } });
+        vars.append({ { "$TELEMT_TOML_TLS", faketls ? "true" : "false" } });
+        vars.append({ { "$TELEMT_PORT", telemtConfig.value(config_key::port).toString(protocols::telemt::defaultPort) } });
+        vars.append({ { "$TELEMT_SECRET", telemtConfig.value(protocols::telemt::secretKey).toString("") } });
+        vars.append({ { "$TELEMT_TAG", telemtConfig.value(protocols::telemt::tagKey).toString("") } });
+        QString telemtTlsDomain = telemtConfig.value(protocols::telemt::tlsDomainKey).toString();
+        if (telemtTlsDomain.isEmpty()) {
+            telemtTlsDomain = protocols::telemt::defaultTlsDomain;
+        }
+        vars.append({ { "$TELEMT_TLS_DOMAIN", telemtTlsDomain } });
+        vars.append({ { "$TELEMT_PUBLIC_HOST", telemtConfig.value(protocols::telemt::publicHostKey).toString("") } });
+        vars.append({ { "$TELEMT_USER_NAME",
+                         telemtConfig.value(protocols::telemt::userNameKey).toString(protocols::telemt::defaultUserName) } });
+        vars.append({ { "$TELEMT_USE_MIDDLE_PROXY",
+                         telemtConfig.value(protocols::telemt::useMiddleProxyKey).toBool(true) ? "true" : "false" } });
+        vars.append({ { "$TELEMT_MASK", telemtConfig.value(protocols::telemt::maskEnabledKey).toBool(true) ? "true" : "false" } });
+        const bool defaultTlsEmu = faketls;
+        vars.append({ { "$TELEMT_TLS_EMULATION",
+                         telemtConfig.value(protocols::telemt::tlsEmulationKey).toBool(defaultTlsEmu) ? "true" : "false" } });
+    }
 
     QString serverIp = (!ContainerProps::isAwgContainer(container) &&
         container != DockerContainer::WireGuard && container != DockerContainer::Xray)

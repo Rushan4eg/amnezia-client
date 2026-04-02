@@ -9,6 +9,7 @@
 #include "core/defs.h"
 #include "core/diagnostics/containerDiagnostics.h"
 #include "core/diagnostics/mtProxyDiagnostics.h"
+#include "core/diagnostics/telemtDiagnostics.h"
 #include "core/sshclient.h"
 
 class Settings;

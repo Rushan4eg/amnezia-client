@@ -693,6 +693,8 @@ QStringList ServersModel::getAllInstalledServicesName(const int serverIndex)
                 servicesName.append("SOCKS5");
             } else if (container == DockerContainer::MtProxy) {
                 servicesName.append("MTProxy");
+            } else if (container == DockerContainer::Telemt) {
+                servicesName.append("Telemt");
             }
         }
     }

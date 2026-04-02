@@ -79,6 +79,8 @@ QVector<amnezia::Proto> ContainerProps::protocolsForContainer(amnezia::DockerCon
 
     case DockerContainer::MtProxy: return { Proto::MtProxy };
 
+    case DockerContainer::Telemt: return { Proto::Telemt };
+
     case DockerContainer::Awg: return { Proto::Awg };
     case DockerContainer::Awg2: return { Proto::Awg };
     default: return { defaultProtocol(container) };
@@ -113,7 +115,8 @@ QMap<DockerContainer, QString> ContainerProps::containerHumanNames()
              { DockerContainer::Dns, QObject::tr("AmneziaDNS") },
              { DockerContainer::Sftp, QObject::tr("SFTP file sharing service") },
              { DockerContainer::Socks5Proxy, QObject::tr("SOCKS5 proxy server") },
-             { DockerContainer::MtProxy, QObject::tr("MTProxy (Telegram)") } };
+             { DockerContainer::MtProxy, QObject::tr("MTProxy (Telegram)") },
+             { DockerContainer::Telemt, QObject::tr("Telemt (Telegram)") } };
 }
 
 QMap<DockerContainer, QString> ContainerProps::containerDescriptions()
@@ -150,7 +153,9 @@ QMap<DockerContainer, QString> ContainerProps::containerDescriptions()
              { DockerContainer::Socks5Proxy,
                QObject::tr("") },
              { DockerContainer::MtProxy,
-               QObject::tr("Telegram MTProto proxy server") } };
+               QObject::tr("Telegram MTProto proxy server") },
+             { DockerContainer::Telemt,
+               QObject::tr("Telegram MTProto proxy (Telemt, Rust)") } };
 }
 
 QMap<DockerContainer, QString> ContainerProps::containerDetailedDescriptions()
@@ -247,7 +252,10 @@ QMap<DockerContainer, QString> ContainerProps::containerDetailedDescriptions()
           QObject::tr("Telegram MTProto proxy server. "
                       "Allows Telegram clients to connect through your server "
                       "using the MTProto protocol. Supports FakeTLS mode for "
-                      "bypassing DPI-based blocking.") }
+                      "bypassing DPI-based blocking.") },
+        { DockerContainer::Telemt,
+          QObject::tr("Telegram MTProto proxy powered by Telemt (Rust). "
+                      "Supports secure and TLS fronting modes with optional traffic masking.") }
     };
 }
 
@@ -275,6 +283,7 @@ Proto ContainerProps::defaultProtocol(DockerContainer c)
     case DockerContainer::Sftp: return Proto::Sftp;
     case DockerContainer::Socks5Proxy: return Proto::Socks5Proxy;
     case DockerContainer::MtProxy: return Proto::MtProxy;
+    case DockerContainer::Telemt: return Proto::Telemt;
     default: return Proto::Any;
     }
 }
@@ -304,6 +313,7 @@ bool ContainerProps::isSupportedByCurrentPlatform(DockerContainer c)
     case DockerContainer::Cloak: return true;
     case DockerContainer::SSXray: return true;
     case DockerContainer::MtProxy: return true;
+    case DockerContainer::Telemt: return true;
         //    case DockerContainer::ShadowSocks: return true;
     default:
         return false;
@@ -342,6 +352,7 @@ bool ContainerProps::isSupportedByCurrentPlatform(DockerContainer c)
     case DockerContainer::Xray: return true;
     case DockerContainer::SSXray: return true;
     case DockerContainer::MtProxy: return true;
+    case DockerContainer::Telemt: return true;
     default: return false;
     }
 
@@ -405,6 +416,7 @@ bool ContainerProps::isShareable(DockerContainer container)
     case DockerContainer::Sftp: return false;
     case DockerContainer::Socks5Proxy: return false;
     case DockerContainer::MtProxy: return false;
+    case DockerContainer::Telemt: return false;
     default: return true;
     }
 }
@@ -436,6 +448,7 @@ int ContainerProps::installPageOrder(DockerContainer container)
     case DockerContainer::Xray: return 3;
     case DockerContainer::Ipsec: return 7;
     case DockerContainer::SSXray: return 8;
+    // case DockerContainer::Telemt: return 10;
     default: return 0;
     }
 }
