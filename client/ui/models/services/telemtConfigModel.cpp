@@ -240,6 +240,7 @@ QJsonObject TelemtConfigModel::getConfig()
 
 void TelemtConfigModel::generateSecret()
 {
+    // 16 random bytes = 32 hex chars (same contract as MTProxy / Telemt configure_container.sh)
     QString secret;
     for (int i = 0; i < 16; ++i) {
         quint32 byte = QRandomGenerator::global()->bounded(256);
@@ -260,7 +261,8 @@ void TelemtConfigModel::setSecret(const QString &secret)
 
 bool TelemtConfigModel::validateAndSetSecret(const QString &rawSecret)
 {
-    if (!QRegularExpression("^[0-9a-fA-F]{32}$").match(rawSecret).hasMatch()) {
+    // Must be exactly 32 hex chars (matches MTProxy and server-side grep in telemt/configure_container.sh)
+    if (!QRegularExpression(QStringLiteral("^[0-9a-fA-F]{32}$")).match(rawSecret).hasMatch()) {
         return false;
     }
     setData(index(0), rawSecret, SecretRole);

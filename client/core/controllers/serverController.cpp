@@ -8,7 +8,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLoggingCategory>
-#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QPointer>
 #include <QTemporaryFile>
@@ -37,23 +36,6 @@
 namespace
 {
     Logger logger("ServerController");
-
-    void ensureTelemtHasValidSecret(QJsonObject &config)
-    {
-        const QString protoKey = ProtocolProps::protoToString(Proto::Telemt);
-        QJsonObject proto = config.value(protoKey).toObject();
-        const QString secret = proto.value(protocols::telemt::secretKey).toString();
-        static const QRegularExpression hex32(QStringLiteral("^[0-9a-fA-F]{32}$"));
-        if (hex32.match(secret).hasMatch()) {
-            return;
-        }
-        QString s;
-        for (int i = 0; i < 16; ++i) {
-            s += QStringLiteral("%1").arg(QRandomGenerator::global()->bounded(256), 2, 16, QLatin1Char('0'));
-        }
-        proto.insert(protocols::telemt::secretKey, s);
-        config.insert(protoKey, proto);
-    }
 
     /**
      * Only treat as "container missing" when Docker CLI clearly refers to this container, or the captured
@@ -603,10 +585,6 @@ ErrorCode ServerController::runContainerWorker(const ServerCredentials &credenti
 
 ErrorCode ServerController::configureContainerWorker(const ServerCredentials &credentials, DockerContainer container, QJsonObject &config)
 {
-    if (container == DockerContainer::Telemt) {
-        ensureTelemtHasValidSecret(config);
-    }
-
     QString stdOut;
     auto cbReadStdOut = [&](const QString &data, libssh::Client &) {
         stdOut += data + "\n";

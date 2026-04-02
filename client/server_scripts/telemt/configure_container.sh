@@ -4,7 +4,18 @@
 echo "[*] Amnezia Telemt: configure script start"
 mkdir -p /data/tlsfront
 
-# Build config.toml (variables substituted on the host by Amnezia before upload)
+# Secret: substituted $TELEMT_SECRET -> saved file -> openssl (same rules as MTProxy configure)
+if [ -n "$TELEMT_SECRET" ]; then
+    SECRET="$TELEMT_SECRET"
+elif [ -f /data/.amnezia-secret ]; then
+    SECRET=$(cat /data/.amnezia-secret)
+else
+    SECRET=$(openssl rand -hex 16)
+fi
+# Must be exactly 32 hex chars
+echo "$SECRET" | grep -qE '^[0-9a-fA-F]{32}$' || SECRET=$(openssl rand -hex 16)
+
+# Build config.toml (other variables substituted on the host by Amnezia before upload)
 rm -f /data/config.toml
 
 {
@@ -47,16 +58,16 @@ rm -f /data/config.toml
     echo "tls_front_dir = \"/data/tlsfront\""
     echo ""
     echo "[access.users]"
-    echo "$TELEMT_USER_NAME = \"$TELEMT_SECRET\""
+    echo "$TELEMT_USER_NAME = \"$SECRET\""
 } > /data/config.toml
 
-echo "$TELEMT_SECRET" > /data/.amnezia-secret
+echo "$SECRET" > /data/.amnezia-secret
 chmod 600 /data/.amnezia-secret 2>/dev/null || true
 
 # Do not start telemt here: a long-lived process + curl loop inside `docker exec` can confuse SSH/Docker
 # timing and is unnecessary — start.sh runs telemt after configure. Links can be empty until the service
 # is up; the client still parses Secret below.
 echo "[*] Telemt configuration"
-echo "[*] Secret:    $TELEMT_SECRET"
+echo "[*] Secret:    $SECRET"
 echo "[*] tg:// link:   "
 echo "[*] t.me link:    "
