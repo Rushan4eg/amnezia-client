@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Мониторинг добычи и трещин МГРП</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛢</text></svg>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
@@ -118,10 +119,13 @@
         <li class="nav-item">
           <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-van" type="button" role="tab">Пультовая ГРП</button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-comp" type="button" role="tab">Сравнение скважин</button>
+        </li>
       </ul>
       <ul class="navbar-nav me-auto d-none d-lg-flex">
         <li class="nav-item"><a class="nav-link" href="#">Скважины</a></li>
-        <li class="nav-item"><a class="nav-link" href="#">Отчёты</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" id="navReport">Отчёт PDF</a></li>
         <li class="nav-item"><a class="nav-link" href="#">Справочники</a></li>
       </ul>
       <div class="d-flex align-items-center gap-3">
@@ -156,6 +160,9 @@
         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-van" type="button" role="tab">
           Пультовая ГРП
         </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-comp" type="button" role="tab">
+          Сравнение скважин
+        </button>
       </div>
       <hr class="mx-2">
       <div class="px-3 footer-note">
@@ -165,6 +172,13 @@
 
     <!-- ══════════════ Контент ══════════════ -->
     <main class="col-lg-10 py-4 px-3 px-lg-4">
+      <div class="alert alert-light alert-dismissible fade show border" role="alert" style="font-size:14px">
+        <b>👋 Это демонстрационный макет</b> платформы мониторинга добычи нефти и трещин МГРП: дашборды, 3D-сцены,
+        инженерные калькуляторы (PKN/KGD, UFD, NPV, пропант), DFIT-анализ с загрузкой CSV, пультовая ГРП в реальном
+        времени и сравнение скважин. Все данные синтетические, модели упрощённые. Кнопка «Отчёт PDF» в шапке собирает
+        сводку по расчётам для печати.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+      </div>
       <div class="tab-content">
 
         <!-- ════════ Вкладка 1: Добыча нефти ════════ -->
@@ -590,6 +604,35 @@
               <table class="table table-sm mt-2" id="table-npv"></table>
             </details>
           </div></div>
+
+          <!-- Модуль 4: подбор пропанта -->
+          <div class="card mt-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">4. Подбор пропанта по напряжению смыкания</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              проводимость упаковки падает с эффективным напряжением σ = P<sub>c</sub> − P<sub>заб</sub>;
+              требуемая проводимость k<sub>f</sub>·w берётся из оптимума модуля 2 с коэффициентом запаса
+            </div>
+            <form class="row g-3 align-items-end mb-3" id="propForm">
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="p-pc">P<sub>c</sub> смыкания, МПа</label>
+                <input type="number" class="form-control" id="p-pc" value="42.5" min="20" max="80" step="0.5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="p-pwf">P<sub>заб</sub> при добыче, МПа</label>
+                <input type="number" class="form-control" id="p-pwf" value="18" min="5" max="40" step="0.5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="p-sf">Коэфф. запаса</label>
+                <input type="number" class="form-control" id="p-sf" value="1.5" min="1" max="3" step="0.1">
+              </div>
+            </form>
+            <div class="row g-3 mb-2" id="prop-tiles"></div>
+            <div id="chart-prop" class="chart" style="height:320px"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-prop"></table>
+            </details>
+          </div></div>
         </div>
 
         <!-- ════════ Вкладка 5: DFIT-анализ ════════ -->
@@ -751,6 +794,56 @@
                 <h2 class="h6 fw-semibold mb-0">Журнал событий</h2>
                 <div class="text-body-secondary mb-2" style="font-size:13px">алерты и статусы стадии, новые сверху</div>
                 <ul class="list-unstyled mb-0" id="van-log" style="max-height:300px; overflow-y:auto; font-size:13px"></ul>
+              </div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════ Вкладка 7: Сравнение скважин ════════ -->
+        <div class="tab-pane fade" id="pane-comp" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Сравнение скважин куста 45</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Четыре горизонтальные скважины с МГРП: профили добычи, удельная эффективность и постадийное сравнение притока.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Паспорт куста</h2>
+            <div class="text-body-secondary mb-2" style="font-size:13px">цветовая метка скважины едина на всех графиках вкладки</div>
+            <div class="table-responsive">
+              <table class="table table-sm mb-1" id="table-wells"></table>
+            </div>
+          </div></div>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Профили добычи за первый год</h2>
+            <div class="text-body-secondary" style="font-size:13px">среднесуточный дебит нефти по месяцам, барр/сут</div>
+            <div id="chart-comp-decline" class="chart tall mt-2"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-comp-decline"></table>
+            </details>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-5">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Удельная эффективность</h2>
+                <div class="text-body-secondary" style="font-size:13px">накопленная добыча за год на стадию и на тонну пропанта</div>
+                <div id="chart-comp-eff" class="chart mt-2" style="height:320px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-7">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Приток по стадиям — две скважины</h2>
+                <form class="row g-2 mt-0 mb-1" id="compForm">
+                  <div class="col-6 col-md-4">
+                    <select class="form-select form-select-sm" id="cmp-a"></select>
+                  </div>
+                  <div class="col-6 col-md-4">
+                    <select class="form-select form-select-sm" id="cmp-b"></select>
+                  </div>
+                </form>
+                <div id="chart-comp-stages" class="chart" style="height:300px"></div>
               </div></div>
             </div>
           </div>
@@ -1715,6 +1808,71 @@ function renderNPV(t) {
   return [c1, c2];
 }
 
+/* ── Модуль 4: подбор пропанта ── */
+/* кривые проводимости упаковки C(σ) = C0·exp(−σ/σ0), мД·м (обобщённые лабораторные) */
+const PROPPANTS = [
+  { name: 'Кварцевый песок 20/40', C0: 2800, s0: 11 },
+  { name: 'РСП 16/30',             C0: 3600, s0: 15 },
+  { name: 'Керамика 16/20',        C0: 5200, s0: 21 },
+  { name: 'Керамика 12/18',        C0: 6800, s0: 25 },
+];
+function renderProppant(t) {
+  const sigma = Math.max(1, num('p-pc') - num('p-pwf'));
+  const sf = num('p-sf');
+  const ufd = calcUFD();
+  /* требуемая проводимость трещины: C_fD·k·x_f оптимума, мД·м */
+  const reqBase = ufd.best.cfd * num('u-k') * ufd.best.xf;
+  const req = reqBase * sf;
+  const rows = PROPPANTS.map(p => {
+    const cond = p.C0 * Math.exp(-sigma / p.s0);
+    const margin = cond / req;
+    const status = margin >= 1 ? ['подходит', 'good'] :
+                   margin >= 0.67 ? ['на пределе', 'warning'] : ['не подходит', 'serious'];
+    return { ...p, cond, margin, status };
+  });
+  const best = rows.filter(r => r.margin >= 1)[0] || rows[rows.length - 1];
+  document.getElementById('prop-tiles').innerHTML =
+    tile('Напряжение на пропант σ', sigma.toFixed(1), 'МПа', 'P_c − P_заб') +
+    tile('Требуемая проводимость', Math.round(req), 'мД·м', 'C_fD·k·X_f (модуль 2) × запас ' + sf) +
+    tile('Рекомендуемый пропант', best.name, '', best.margin >= 1 ? 'запас ×' + best.margin.toFixed(1) : 'запаса нет — увеличьте массу') +
+    tile('Проводимость выбранного', Math.round(best.cond), 'мД·м');
+  const el = document.getElementById('chart-prop');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: t.series,
+    grid: { left: 8, right: 48, top: 36, bottom: 8, containLabel: true },
+    legend: { ...baseLegend(t) },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => Math.round(v) + ' мД·м' },
+    xAxis: { type: 'value', min: 5, max: 60, name: 'σ, МПа', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'log', name: 'проводимость, мД·м', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false } },
+    series: [
+      ...PROPPANTS.map((p, i) => ({
+        name: p.name, type: 'line', showSymbol: false, lineStyle: { width: 2 },
+        data: Array.from({ length: 56 }, (_, k) => {
+          const s = 5 + k;
+          return [s, +(p.C0 * Math.exp(-s / p.s0)).toFixed(0)];
+        }),
+        ...(i === 0 ? { markLine: {
+          symbol: 'none', silent: true,
+          lineStyle: { color: t.baseline, width: 1 },
+          label: { color: t.ink2, fontSize: 12 },
+          data: [
+            { xAxis: +sigma.toFixed(1), label: { formatter: 'рабочая точка σ = ' + sigma.toFixed(1) } },
+            { yAxis: Math.round(req), label: { formatter: 'требуется ' + Math.round(req), position: 'insideEndTop' } },
+          ],
+        } } : {}),
+      })),
+    ],
+  });
+  fillTable('table-prop', ['Пропант', 'Проводимость при σ, мД·м', 'Запас к требуемой', 'Вердикт'],
+    rows.map(r => [r.name, Math.round(r.cond), '×' + r.margin.toFixed(2), r.status[0]]));
+  return [c];
+}
+
 /* ══════════════════════ DFIT-анализ ══════════════════════ */
 /* G-функция Нолте (приближение малых утечек) */
 function Gfun(dtD) {
@@ -2138,6 +2296,260 @@ function vanTick() {
   if (van.i >= van.rows.length - 1) { clearInterval(van.timer); van.timer = null; }
 }
 
+/* ══════════════════════ сравнение скважин ══════════════════════ */
+/* синтетический куст: q(t) — гиперболика Арпса, приток по стадиям — со «слабыми» портами */
+const wells = (() => {
+  let s = 21;
+  const rnd2 = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  const defs = [
+    { name: '4568Г', stages: 16, prop: 1520, xf: 155, qi: 505, Di: 0.9,  wc: 71 },
+    { name: '4570Г', stages: 10, prop: 900,  xf: 120, qi: 300, Di: 1.4,  wc: 80 },
+    { name: '4571Г', stages: 12, prop: 1080, xf: 142, qi: 420, Di: 0.85, wc: 62 },
+    { name: '4572Г', stages: 8,  prop: 720,  xf: 128, qi: 330, Di: 0.7,  wc: 58 },
+  ];
+  return defs.map(w => {
+    const monthly = Array.from({ length: 12 }, (_, m) => Math.round(w.qi / (1 + w.Di * (m + 0.5) / 12)));
+    const cum = Math.round(monthly.reduce((a, q) => a + q * 30.44, 0) / 1000); /* тыс. барр./год */
+    const inflow = Array.from({ length: w.stages }, () => 5 + rnd2() * 10);
+    if (w.name === '4570Г') { inflow[3] = 0.8; inflow[7] = 1.2; } /* два неработающих порта */
+    const sum = inflow.reduce((a, b) => a + b, 0);
+    return { ...w, monthly, cum, inflow: inflow.map(v => +(v / sum * 100).toFixed(1)) };
+  });
+})();
+
+function renderCompDecline(t) {
+  const el = document.getElementById('chart-comp-decline');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: t.series,
+    grid: { left: 8, right: 90, top: 36, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: t.baseline, width: 1 } },
+      valueFormatter: v => v + ' барр/сут' },
+    xAxis: { type: 'category', data: Array.from({ length: 12 }, (_, m) => (m + 1) + ' мес'),
+      boundaryGap: false, ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 11 } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    series: wells.map(w => ({
+      name: w.name, type: 'line', data: w.monthly,
+      lineStyle: { width: 2, cap: 'round' },
+      symbol: 'circle', symbolSize: 8, showSymbol: false,
+      itemStyle: { borderColor: t.surface, borderWidth: 2 },
+      emphasis: { focus: 'series' },
+      endLabel: { show: true, formatter: w.name, color: t.ink2, fontSize: 12, distance: 8 },
+    })),
+  });
+  fillTable('table-comp-decline', ['Месяц', ...wells.map(w => w.name)],
+    Array.from({ length: 12 }, (_, m) => [(m + 1), ...wells.map(w => w.monthly[m])]));
+  return c;
+}
+
+function renderCompEff(t) {
+  const el = document.getElementById('chart-comp-eff');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  /* две метрики разного масштаба — две панели с общей осью скважин */
+  const perStage = wells.map(w => +(w.cum / w.stages).toFixed(1));
+  const perTon   = wells.map(w => +(w.cum * 1000 / w.prop).toFixed(0));
+  c.setOption({
+    grid: [
+      { left: 8, right: 16, top: 30, height: '32%', containLabel: true },
+      { left: 8, right: 16, top: '62%', height: '32%', containLabel: true },
+    ],
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => wells[p.dataIndex].name + '<br><b>' + p.value + '</b> ' +
+        (p.seriesIndex === 0 ? 'тыс. барр./стадию' : 'барр./т пропанта') },
+    xAxis: [0, 1].map(i => ({
+      type: 'category', gridIndex: i, data: wells.map(w => w.name),
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 11 },
+    })),
+    yAxis: [
+      { type: 'value', gridIndex: 0, name: 'тыс. барр. / стадию',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+      { type: 'value', gridIndex: 1, name: 'барр. / т пропанта',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+    ],
+    series: [
+      { type: 'bar', xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 22,
+        data: perStage.map((v, i) => ({ value: v, itemStyle: { color: t.series[i], borderRadius: [4, 4, 0, 0] } })),
+        label: { show: true, position: 'top', color: t.ink2, fontSize: 11 } },
+      { type: 'bar', xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 22,
+        data: perTon.map((v, i) => ({ value: v, itemStyle: { color: t.series[i], borderRadius: [4, 4, 0, 0] } })),
+        label: { show: true, position: 'top', color: t.ink2, fontSize: 11 } },
+    ],
+  });
+  return c;
+}
+
+function renderCompStages(t) {
+  const selA = document.getElementById('cmp-a'), selB = document.getElementById('cmp-b');
+  if (!selA.options.length) {
+    wells.forEach((w, i) => {
+      selA.add(new Option('Скважина ' + w.name, i));
+      selB.add(new Option('Скважина ' + w.name, i));
+    });
+    selA.value = 2; selB.value = 1;  /* 4571Г vs 4570Г — контраст с неработающими портами */
+  }
+  const A = wells[+selA.value], B = wells[+selB.value];
+  const n = Math.max(A.stages, B.stages);
+  const el = document.getElementById('chart-comp-stages');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: [t.series[+selA.value], t.series[+selB.value]],
+    grid: { left: 8, right: 8, top: 40, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { opacity: 0.06 } },
+      valueFormatter: v => (v == null ? '—' : v + ' %') },
+    xAxis: { type: 'category', data: Array.from({ length: n }, (_, i) => 'Ст. ' + (i + 1)),
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 10, interval: 0 } },
+    yAxis: { type: 'value', name: 'доля притока, %', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false } },
+    series: [
+      { name: A.name, type: 'bar', barMaxWidth: 12, barGap: '25%',
+        data: Array.from({ length: n }, (_, i) => i < A.stages ? A.inflow[i] : null),
+        itemStyle: { borderRadius: [3, 3, 0, 0] } },
+      { name: B.name, type: 'bar', barMaxWidth: 12,
+        data: Array.from({ length: n }, (_, i) => i < B.stages ? B.inflow[i] : null),
+        itemStyle: { borderRadius: [3, 3, 0, 0] } },
+    ],
+  });
+  return c;
+}
+
+function renderComp(t) {
+  /* паспорт куста: цветовая метка + метрики */
+  document.getElementById('table-wells').innerHTML =
+    '<tr><th>Скважина</th><th>Стадий</th><th>Пропант, т</th><th>Ср. X<sub>f</sub>, м</th>' +
+    '<th>Старт. дебит, барр/сут</th><th>Добыча за год, тыс. барр.</th><th>Обводнённость, %</th></tr>' +
+    wells.map((w, i) =>
+      '<tr><td><span style="color:' + t.series[i] + '">●</span> ' + w.name + '</td>' +
+      '<td>' + w.stages + '</td><td>' + w.prop + '</td><td>' + w.xf + '</td>' +
+      '<td>' + w.qi + '</td><td>' + w.cum + '</td><td>' + w.wc + '</td></tr>').join('');
+  return [renderCompDecline(t), renderCompEff(t), renderCompStages(t)];
+}
+
+/* ══════════════════════ PDF-отчёт ══════════════════════ */
+/* фиксированная светлая палитра — отчёт печатается светлым независимо от темы приложения */
+const REPORT_T = {
+  surface: '#ffffff', ink: '#0b0b0b', ink2: '#52514e', muted: '#898781',
+  grid: '#e1e0d9', baseline: '#c3c2b7', border: 'rgba(11,11,11,0.1)',
+  series: ['#2a78d6', '#1baf7a', '#eda100', '#4a3aa7'],
+};
+function reportChartImg(option) {
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;left:-10000px;top:0;width:720px;height:300px;';
+  document.body.appendChild(div);
+  const c = echarts.init(div);
+  c.setOption(option);
+  const url = c.getDataURL({ pixelRatio: 2, backgroundColor: '#fff' });
+  c.dispose();
+  div.remove();
+  return url;
+}
+function buildReport() {
+  const t = REPORT_T;
+  const geo = calcGeometry(); const g = geo[geo.length - 1];
+  const ufd = calcUFD();
+  const npv = calcNPV();
+  const dfit = analyzeDfit();
+  /* график J_D */
+  const imgJD = reportChartImg({
+    animation: false,
+    title: { text: 'UFD: J_D от C_fD, оптимум', left: 0, textStyle: { color: t.ink2, fontSize: 13 } },
+    grid: { left: 8, right: 40, top: 36, bottom: 8, containLabel: true },
+    xAxis: { type: 'log', min: 0.1, max: 1000, ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: v => v.toFixed(1) } },
+    series: [{ type: 'line', showSymbol: false, lineStyle: { width: 2, color: t.series[0] },
+      data: ufd.pts.map(p => [p.cfd, +p.JD.toFixed(4)]),
+      markPoint: { symbol: 'circle', symbolSize: 9,
+        itemStyle: { color: t.series[0], borderColor: '#fff', borderWidth: 2 },
+        label: { color: t.ink2, fontSize: 12, position: ufd.best.cfd < 1 ? 'right' : 'top',
+          formatter: 'оптимум' },
+        data: [{ coord: [ufd.best.cfd, +ufd.best.JD.toFixed(4)] }] } }],
+  });
+  /* график NPV */
+  const imgNPV = reportChartImg({
+    animation: false,
+    title: { text: 'NPV от числа стадий, млн $', left: 0, textStyle: { color: t.ink2, fontSize: 13 } },
+    grid: { left: 8, right: 8, top: 36, bottom: 8, containLabel: true },
+    xAxis: { type: 'category', data: npv.res.map(x => x.N), ...baseAxis(t),
+      splitLine: { show: false }, axisLabel: { color: t.muted, fontSize: 11 } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    series: [{ type: 'bar', barMaxWidth: 16, data: npv.res.map(x => +x.npv.toFixed(2)),
+      itemStyle: { color: t.series[0], borderRadius: [3, 3, 0, 0] } }],
+  });
+  const fmtRow = cells => '<tr>' + cells.map(c => '<td>' + c + '</td>').join('') + '</tr>';
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
+<title>Отчёт — дизайн и мониторинг ГРП</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0b0b0b;
+    max-width: 800px; margin: 24px auto; padding: 0 16px; font-size: 14px; }
+  h1 { font-size: 22px; } h2 { font-size: 16px; margin-top: 28px; }
+  .meta { color: #52514e; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+  td, th { border-bottom: 1px solid #e1e0d9; padding: 5px 10px; text-align: right; }
+  td:first-child, th:first-child { text-align: left; }
+  th { color: #52514e; font-weight: 500; }
+  img { max-width: 100%; }
+  .note { color: #898781; font-size: 12px; margin-top: 24px; }
+  .print-btn { padding: 8px 18px; font-size: 14px; margin: 12px 0; cursor: pointer; }
+  @media print { .print-btn { display: none; } }
+</style></head><body>
+<h1>🛢 Отчёт: дизайн и мониторинг ГРП — скважина 4571Г</h1>
+<div class="meta">Сформирован: ${new Date().toLocaleString('ru-RU')} · НефтеМониторинг (демо-макет, данные синтетические)</div>
+<button class="print-btn" onclick="window.print()">🖨 Печать / сохранить в PDF</button>
+
+<h2>1. Геометрия трещины (PKN / KGD)</h2>
+<table>
+<tr><th>Модель</th><th>Полудлина X_f, м</th><th>Ширина у ствола, мм</th></tr>
+${fmtRow(['PKN', Math.round(g.xfp), g.wp.toFixed(1)])}
+${fmtRow(['KGD', Math.round(g.xfk), g.wk.toFixed(1)])}
+</table>
+
+<h2>2. Оптимальная геометрия (Unified Fracture Design)</h2>
+<table>
+<tr><th>N_p</th><th>Оптимум C_fD</th><th>X_f опт, м</th><th>w опт, мм</th><th>J_D</th></tr>
+${fmtRow([ufd.Np.toFixed(2), ufd.best.cfd.toFixed(1), Math.round(ufd.best.xf), ufd.best.w.toFixed(1), ufd.best.JD.toFixed(3)])}
+</table>
+<img src="${imgJD}" alt="J_D vs C_fD">
+
+<h2>3. Экономика: оптимум числа стадий</h2>
+<table>
+<tr><th>Оптимум стадий</th><th>NPV, млн $</th><th>Добыча за горизонт, тыс. барр.</th><th>Стартовый дебит, барр/сут</th></tr>
+${fmtRow([npv.best.N, npv.best.npv.toFixed(1), Math.round(npv.best.cum), Math.round(npv.best.qi)])}
+</table>
+<img src="${imgNPV}" alt="NPV vs N">
+
+<h2>4. DFIT (мини-ГРП)</h2>
+${dfit ? `<table>
+<tr><th>ISIP, МПа</th><th>P смыкания, МПа</th><th>G_c</th><th>Время смыкания, мин</th><th>Эффективность жидкости</th></tr>
+${fmtRow([dfit.ISIP.toFixed(1), dfit.c ? dfit.c.P.toFixed(1) : '—', dfit.c ? dfit.c.G.toFixed(2) : '—',
+          dfit.c ? dfit.c.t.toFixed(1) : '—', dfit.eta ? (dfit.eta * 100).toFixed(0) + ' %' : '—'])}
+</table>` : '<div class="meta">Данные DFIT не загружены.</div>'}
+
+<h2>5. Скважины куста 45</h2>
+<table>
+<tr><th>Скважина</th><th>Стадий</th><th>Пропант, т</th><th>Ср. X_f, м</th><th>Старт. дебит, барр/сут</th><th>Добыча за год, тыс. барр.</th></tr>
+${wells.map(x => fmtRow([x.name, x.stages, x.prop, x.xf, x.qi, x.cum])).join('')}
+</table>
+
+<div class="note">Модели упрощённые, учебные: ширина трещины — решения без утечек (Нордгрен, Гертсма—де Клерк),
+оптимум — по псевдоскин-корреляции Синко-Лея, экономика — гиперболика Арпса с интерференцией стадий,
+смыкание — метод касательной на G-функции Нолте. Построено на Apache ECharts и Bootstrap 5.</div>
+</body></html>`);
+  w.document.close();
+}
+
 /* ══════════════════════ таблицы ══════════════════════ */
 function fillTable(id, header, rows) {
   document.getElementById(id).innerHTML =
@@ -2170,13 +2582,16 @@ const panes = {
                    renderBar3d(t), renderTraj(t), renderGlobe(t)];
   } },
   'pane-calc': { inited: false, charts: [], render(t) {
-    this.charts = [...renderGeo(t), ...renderUFD(t), ...renderNPV(t)];
+    this.charts = [...renderGeo(t), ...renderUFD(t), ...renderNPV(t), ...renderProppant(t)];
   } },
   'pane-dfit': { inited: false, charts: [], render(t) {
     this.charts = renderDfit(t);
   } },
   'pane-van': { inited: false, charts: [], render(t) {
     this.charts = renderVan(t);
+  } },
+  'pane-comp': { inited: false, charts: [], render(t) {
+    this.charts = renderComp(t);
   } },
 };
 function activePaneId() {
@@ -2209,16 +2624,22 @@ document.getElementById('fracForm').addEventListener('input', () => {
 });
 document.getElementById('fracForm').addEventListener('submit', e => e.preventDefault());
 
-/* пересчёт калькулятора при изменении любого инпута своего модуля */
-[['geoForm', 0, renderGeo], ['ufdForm', 2, renderUFD], ['npvForm', 3, renderNPV]]
-.forEach(([id, offset, fn]) => {
+/* пересчёт калькулятора при изменении любого инпута своего модуля;
+   подбор пропанта зависит от оптимума UFD, поэтому обновляется вместе с ним */
+[['geoForm', [[0, renderGeo]]],
+ ['ufdForm', [[2, renderUFD], [5, renderProppant]]],
+ ['npvForm', [[3, renderNPV]]],
+ ['propForm', [[5, renderProppant]]]]
+.forEach(([id, parts]) => {
   const form = document.getElementById(id);
   form.addEventListener('submit', e => e.preventDefault());
   form.addEventListener('input', () => {
     const p = panes['pane-calc'];
     if (!p.inited) return;
-    const fresh = fn(theme());
-    p.charts.splice(offset, fresh.length, ...fresh);  /* заменяем пересозданные инстансы в реестре */
+    parts.forEach(([offset, fn]) => {
+      const fresh = fn(theme());
+      p.charts.splice(offset, fresh.length, ...fresh);  /* заменяем пересозданные инстансы в реестре */
+    });
   });
 });
 
@@ -2269,6 +2690,19 @@ document.getElementById('v-export').addEventListener('click', () => {
   a.click();
   URL.revokeObjectURL(a.href);
 });
+
+/* PDF-отчёт из верхнего навбара */
+document.getElementById('navReport').addEventListener('click', e => {
+  e.preventDefault();
+  buildReport();
+});
+
+/* сравнение: выбор пары скважин для постадийного графика */
+document.getElementById('compForm').addEventListener('submit', e => e.preventDefault());
+['cmp-a', 'cmp-b'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  const p = panes['pane-comp'];
+  if (p.inited) p.charts.splice(2, 1, renderCompStages(theme()));
+}));
 
 window.addEventListener('resize', () => panes[activePaneId()].charts.forEach(c => c.resize()));
 </script>
