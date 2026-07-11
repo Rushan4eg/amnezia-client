@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/js/world.js"></script>
 <style>
   :root, [data-bs-theme="light"] {
     --bs-body-bg: #f9f9f7;
@@ -388,6 +389,35 @@
               </div></div>
             </div>
           </div>
+
+          <div class="row g-3 mt-0">
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Добыча по регионам в 3D</h2>
+                <div class="text-body-secondary" style="font-size:13px">млн тонн, годы × регионы; высота и цвет — объём добычи</div>
+                <div id="chart-bar3d" class="chart mt-2" style="height:420px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Траектория скважины 4571Г</h2>
+                <div class="text-body-secondary" style="font-size:13px">по данным инклинометрии: вертикальный участок, набор угла, горизонтальный ствол с портами МГРП</div>
+                <div id="chart-traj" class="chart mt-2" style="height:420px"></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="card mt-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Крупнейшие месторождения мира на глобусе</h2>
+            <div class="text-body-secondary" style="font-size:13px">
+              высота и цвет столбика — добыча, млн барр./сут; глобус вращается автоматически и мышью
+            </div>
+            <div id="chart-globe" class="chart mt-2" style="height:560px"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-globe"></table>
+            </details>
+          </div></div>
         </div>
 
       </div>
@@ -946,6 +976,156 @@ function renderDrops(t) {
   return c;
 }
 
+/* ── 3D-бары: добыча по регионам × годам ── */
+function renderBar3d(t) {
+  const el = document.getElementById('chart-bar3d');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  const data = [];
+  regions.forEach((r, ri) => r.data.forEach((v, yi) => data.push([yi, ri, v])));
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => regions[p.value[1]].name + ', ' + years[p.value[0]] +
+        '<br><b>' + p.value[2] + '</b> млн т' },
+    visualMap: {
+      type: 'continuous', dimension: 2, min: 0, max: 330,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['млн т', ''], textStyle: { color: t.ink2, fontSize: 12 },
+      inRange: { color: ['#9ec5f4', '#5598e7', '#256abf', '#0d366b'] },
+    },
+    grid3D: {
+      boxWidth: 150, boxDepth: 60, boxHeight: 70,
+      environment: t.surface,
+      light: { main: { intensity: 1.1, shadow: false }, ambient: { intensity: 0.5 } },
+      viewControl: { distance: 220, alpha: 20, beta: 35 },
+    },
+    xAxis3D: { type: 'category', data: years, ...base3dAxis(t, '') },
+    yAxis3D: { type: 'category', data: regions.map(r => r.name), ...base3dAxis(t, ''),
+      axisLabel: { color: t.muted, fontSize: 9 } },
+    zAxis3D: { type: 'value', max: 340, ...base3dAxis(t, 'млн т') },
+    series: [{
+      type: 'bar3D', data, barSize: 5, bevelSize: 0.3, bevelSmoothness: 4,
+      shading: 'lambert',
+      emphasis: { itemStyle: { color: t.series[2] } },
+    }],
+  });
+  return c;
+}
+
+/* ── 3D-траектория ствола по инклинометрии ── */
+function buildTrajectory() {
+  const pts = [];
+  for (let z = 0; z >= -2400; z -= 60) pts.push([0, 0, z]);              // вертикальный участок
+  const R = 440;
+  for (let a = 5; a <= 90; a += 5) {                                     // набор угла радиусом 440 м
+    const rad = a * Math.PI / 180;
+    pts.push([R * (1 - Math.cos(rad)), 0, -2400 - R * Math.sin(rad)]);
+  }
+  for (let x = R + 50; x <= R + 1400; x += 50) pts.push([x, 0, -2840]);  // горизонтальный ствол
+  return pts;
+}
+function renderTraj(t) {
+  const el = document.getElementById('chart-traj');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  const traj = buildTrajectory();
+  const ports = PORT_X.map(x => [440 + x, 0, -2840]);
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => p.seriesName === 'Порты МГРП'
+        ? 'Порт МГРП<br>смещение ' + Math.round(p.value[0]) + ' м · глубина ' + p.value[2] + ' м'
+        : 'Ствол скважины<br>смещение ' + Math.round(p.value[0]) + ' м · глубина ' + Math.round(p.value[2]) + ' м' },
+    grid3D: {
+      boxWidth: 110, boxDepth: 50, boxHeight: 130,
+      environment: t.surface,
+      light: { main: { intensity: 1.1, shadow: false }, ambient: { intensity: 0.5 } },
+      viewControl: { distance: 250, alpha: 10, beta: 40 },
+    },
+    xAxis3D: { type: 'value', min: -100, max: 2000, ...base3dAxis(t, 'смещение, м') },
+    yAxis3D: { type: 'value', min: -400, max: 400, ...base3dAxis(t, '') },
+    zAxis3D: { type: 'value', min: -3000, max: 0, ...base3dAxis(t, 'глубина, м') },
+    series: [
+      { name: 'Ствол', type: 'line3D', data: traj,
+        lineStyle: { width: 6, color: t.series[0] } },
+      { name: 'Порты МГРП', type: 'scatter3D', data: ports,
+        symbolSize: 9, itemStyle: { color: t.series[2] },
+        emphasis: { itemStyle: { color: t.serious } } },
+      { name: 'Устье', type: 'scatter3D', data: [[0, 0, 0]],
+        symbolSize: 14, itemStyle: { color: t.series[1] },
+        label: { show: true, formatter: 'устье', distance: 6,
+          textStyle: { color: t.ink2, fontSize: 12, backgroundColor: 'transparent' } } },
+    ],
+  });
+  return c;
+}
+
+/* ── глобус: крупнейшие месторождения мира ── */
+const worldFields = [
+  { name: 'Гавар (С. Аравия)',       coord: [49.6, 25.4],   v: 3.8 },
+  { name: 'Пермский бассейн (США)',  coord: [-102.4, 31.8], v: 5.8 },
+  { name: 'Большой Бурган (Кувейт)', coord: [47.9, 28.9],   v: 1.7 },
+  { name: 'Румайла (Ирак)',          coord: [47.3, 30.2],   v: 1.4 },
+  { name: 'Сафания (С. Аравия)',     coord: [48.8, 28.0],   v: 1.2 },
+  { name: 'Тенгиз (Казахстан)',      coord: [53.4, 46.2],   v: 0.7 },
+  { name: 'Кашаган (Казахстан)',     coord: [51.6, 46.6],   v: 0.4 },
+  { name: 'Приобское (Россия)',      coord: [70.2, 61.3],   v: 0.7 },
+  { name: 'Самотлорское (Россия)',   coord: [76.7, 60.9],   v: 0.6 },
+  { name: 'Ванкорское (Россия)',     coord: [83.6, 67.8],   v: 0.42 },
+  { name: 'Дацин (Китай)',           coord: [125.0, 46.6],  v: 0.6 },
+  { name: 'Тупи (Бразилия)',         coord: [-42.9, -25.4], v: 0.9 },
+  { name: 'Кантарел (Мексика)',      coord: [-92.2, 19.4],  v: 0.16 },
+];
+let globeTexChart = null;
+function renderGlobe(t) {
+  const el = document.getElementById('chart-globe');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  /* текстура глобуса — отдельный echarts-инстанс с картой мира в равнопромежуточной проекции */
+  if (globeTexChart) { globeTexChart.dispose(); }
+  const texCanvas = document.createElement('canvas');
+  globeTexChart = echarts.init(texCanvas, null, { width: 2048, height: 1024 });
+  globeTexChart.setOption({
+    backgroundColor: t.surface,
+    geo: {
+      map: 'world', left: 0, top: 0, right: 0, bottom: 0,
+      boundingCoords: [[-180, 90], [180, -90]],
+      silent: true, roam: false,
+      itemStyle: { areaColor: t.grid, borderColor: t.baseline, borderWidth: 0.7 },
+    },
+  });
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => p.data && p.data.name
+        ? p.data.name + '<br><b>' + p.data.value[3] + '</b> млн барр./сут' : '' },
+    visualMap: {
+      type: 'continuous', dimension: 3, min: 0, max: 6,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['млн барр./сут', ''], textStyle: { color: t.ink2, fontSize: 12 },
+      /* на тёмном глобусе шкала светлеет к максимуму, на светлом — темнеет */
+      inRange: { color: document.documentElement.getAttribute('data-bs-theme') === 'dark'
+        ? ['#256abf', '#5598e7', '#9ec5f4', '#cde2fb']
+        : ['#9ec5f4', '#5598e7', '#256abf', '#0d366b'] },
+      seriesIndex: 0,
+    },
+    globe: {
+      baseTexture: globeTexChart,
+      shading: 'color',
+      environment: t.surface,
+      atmosphere: { show: true, color: t.series[0], glowPower: 4, innerGlowPower: 1 },
+      light: { main: { intensity: 1, shadow: false }, ambient: { intensity: 1 } },
+      viewControl: { autoRotate: true, autoRotateSpeed: 6, distance: 180, targetCoord: [60, 40] },
+    },
+    series: [{
+      type: 'bar3D', coordinateSystem: 'globe',
+      /* высота столбика нормирована вручную: value[2] = добыча × 12 (ед. радиуса глобуса) */
+      data: worldFields.map(f => ({ name: f.name, value: [...f.coord, f.v * 12, f.v] })),
+      barSize: 1.2, minHeight: 2,
+      shading: 'color',
+    }],
+  });
+  return c;
+}
+
 /* ══════════════════════ таблицы ══════════════════════ */
 function fillTable(id, header, rows) {
   document.getElementById(id).innerHTML =
@@ -962,6 +1142,8 @@ fillTable('table-treatment', ['t, мин', 'Давление, МПа', 'Расх
   treatment.filter(r => r[0] % 10 === 0).map(r => r));
 fillTable('table-inflow', ['Стадия', 'Приток, %'],
   inflow.map((v, i) => ['Стадия ' + (i + 1), v]));
+fillTable('table-globe', ['Месторождение', 'млн барр./сут'],
+  [...worldFields].sort((a, b) => b.v - a.v).map(f => [f.name, f.v]));
 
 /* ══════════════════════ вкладки и жизненный цикл ══════════════════════ */
 const panes = {
@@ -972,7 +1154,8 @@ const panes = {
     this.charts = [renderTreatment(t), renderMicroseismic(t), renderInflow(t), renderXf(t)];
   } },
   'pane-3d': { inited: false, charts: [], render(t) {
-    this.charts = [renderMs3d(t), renderSurface(t), renderGauge(t), renderDrops(t)];
+    this.charts = [renderMs3d(t), renderSurface(t), renderGauge(t), renderDrops(t),
+                   renderBar3d(t), renderTraj(t), renderGlobe(t)];
   } },
 };
 function activePaneId() {
