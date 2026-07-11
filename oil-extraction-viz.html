@@ -6,6 +6,7 @@
 <title>Мониторинг добычи и трещин МГРП</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
 <style>
   :root, [data-bs-theme="light"] {
     --bs-body-bg: #f9f9f7;
@@ -17,6 +18,8 @@
     --baseline:       #c3c2b7;
     --border-viz:     rgba(11, 11, 11, 0.10);
     --delta-good:     #006300;
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
     --status-serious: #ec835a;
     --series-1:       #2a78d6;  /* синий  */
     --series-2:       #1baf7a;  /* аква   */
@@ -35,6 +38,8 @@
     --baseline:       #383835;
     --border-viz:     rgba(255, 255, 255, 0.10);
     --delta-good:     #0ca30c;
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
     --status-serious: #ec835a;
     --series-1:       #3987e5;
     --series-2:       #199e70;
@@ -100,6 +105,9 @@
         <li class="nav-item">
           <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-frac" type="button" role="tab">Трещины МГРП</button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-3d" type="button" role="tab">3D и SVG</button>
+        </li>
       </ul>
       <ul class="navbar-nav me-auto d-none d-lg-flex">
         <li class="nav-item"><a class="nav-link" href="#">Скважины</a></li>
@@ -125,6 +133,9 @@
         </button>
         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-frac" type="button" role="tab">
           Трещины МГРП
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-3d" type="button" role="tab">
+          3D и SVG
         </button>
       </div>
       <hr class="mx-2">
@@ -335,6 +346,50 @@
           </div></div>
         </div>
 
+        <!-- ════════ Вкладка 3: 3D и SVG ════════ -->
+        <div class="tab-pane fade" id="pane-3d" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Объёмная и SVG-визуализация</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            3D-сцены на ECharts GL (WebGL) — вращаются мышью; спидометр и пиктограммы отрисованы SVG-рендерером ECharts.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Микросейсмика в 3D — облако событий вокруг ствола</h2>
+            <div class="text-body-secondary" style="font-size:13px">
+              оси: вдоль ствола × поперёк × глубина, м; цвет — номер стадии, размер — магнитуда; сцена вращается автоматически и мышью
+            </div>
+            <div id="chart-ms3d" class="chart mt-2" style="height:520px"></div>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-7">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Структурная поверхность кровли пласта</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  абсолютная отметка кровли, м; купольное поднятие — цель бурения
+                </div>
+                <div id="chart-surface" class="chart mt-2" style="height:480px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-5 d-flex flex-column gap-3">
+              <div class="card"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Устьевое давление — стадия в работе</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  зоны: <span style="color:var(--status-good)">●</span> норма до 45 ·
+                  <span style="color:var(--status-warning)">●</span> внимание 45–52 ·
+                  <span style="color:var(--status-serious)">●</span> риск СТОП-а &gt; 52 МПа
+                </div>
+                <div id="chart-gauge" class="chart mt-1" style="height:240px"></div>
+              </div></div>
+              <div class="card flex-grow-1"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Добыча по месторождениям</h2>
+                <div class="text-body-secondary" style="font-size:13px">тыс. барр./сут; одна капля ≈ 50 тыс. барр.</div>
+                <div id="chart-drops" class="chart mt-1" style="height:250px"></div>
+              </div></div>
+            </div>
+          </div>
+        </div>
+
       </div>
       <p class="footer-note mt-4">Данные синтетические и приведены для демонстрации макета. Построено на Apache ECharts и Bootstrap 5.</p>
     </main>
@@ -368,6 +423,8 @@ function theme() {
     grid:     cssVar('--gridline'),
     baseline: cssVar('--baseline'),
     border:   cssVar('--border-viz'),
+    good:     cssVar('--status-good'),
+    warning:  cssVar('--status-warning'),
     serious:  cssVar('--status-serious'),
     rampLo:   cssVar('--ramp-lo'),
     rampHi:   cssVar('--ramp-hi'),
@@ -730,6 +787,165 @@ function renderXf(t) {
   return c;
 }
 
+/* ══════════════════════ графики: 3D и SVG ══════════════════════ */
+/* глубина событий: детерминированно от координат, пласт на а.о. −2840 м */
+const ms3d = msEvents.map(e =>
+  [e[0], e[1], -2840 + Math.sin(e[0] * 12.9898 + e[1] * 78.233) * 42, e[3], e[2]]);
+
+function base3dAxis(t, name) {
+  return {
+    name, nameTextStyle: { color: t.ink2, fontSize: 12 },
+    axisLine: { lineStyle: { color: t.baseline } },
+    axisLabel: { color: t.muted, fontSize: 10 },
+    splitLine: { lineStyle: { color: t.grid, opacity: 0.6 } },
+    axisPointer: { show: false },
+  };
+}
+
+function renderMs3d(t) {
+  const el = document.getElementById('chart-ms3d');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => p.seriesType === 'scatter3D'
+        ? 'Стадия ' + p.value[3] + '<br>X: ' + p.value[0] + ' м · Y: ' + p.value[1] +
+          ' м<br>Глубина: ' + Math.round(p.value[2]) + ' м · M ' + p.value[4]
+        : 'Горизонтальный ствол, а.о. −2840 м' },
+    visualMap: {
+      type: 'continuous', dimension: 3, min: 1, max: N_STAGES,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['стадия 12', 'стадия 1'],
+      textStyle: { color: t.ink2, fontSize: 12 },
+      inRange: { color: [t.rampLo, t.rampHi] },
+      seriesIndex: 0,
+    },
+    grid3D: {
+      boxWidth: 180, boxDepth: 90, boxHeight: 60,
+      environment: t.surface,
+      light: { main: { intensity: 1.1, shadow: false }, ambient: { intensity: 0.5 } },
+      viewControl: { autoRotate: true, autoRotateSpeed: 6, distance: 230, alpha: 18, beta: 30 },
+    },
+    xAxis3D: { type: 'value', min: 0, max: 1400, ...base3dAxis(t, 'вдоль ствола, м') },
+    yAxis3D: { type: 'value', min: -300, max: 300, ...base3dAxis(t, 'поперёк, м') },
+    zAxis3D: { type: 'value', min: -2950, max: -2730, ...base3dAxis(t, 'глубина, м') },
+    series: [
+      {
+        type: 'scatter3D', data: ms3d,
+        symbolSize: v => 16 + v[4] * 4,   /* M −1 → 12px, M −3 → 4px */
+        itemStyle: { opacity: 0.85 },
+        emphasis: { itemStyle: { opacity: 1 } },
+      },
+      {
+        type: 'line3D',
+        data: Array.from({ length: 57 }, (_, i) => [i * 25, 0, -2840]),
+        lineStyle: { width: 5, color: t.ink2 },
+      },
+    ],
+  });
+  return c;
+}
+
+function renderSurface(t) {
+  const el = document.getElementById('chart-surface');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => 'X: ' + Math.round(p.value[0]) + ' м · Y: ' + Math.round(p.value[1]) +
+        ' м<br>Кровля: <b>' + Math.round(p.value[2]) + ' м</b>' },
+    visualMap: {
+      type: 'continuous', dimension: 2, min: -2830, max: -2660,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['выше', 'глубже'],
+      textStyle: { color: t.ink2, fontSize: 12 },
+      /* глубже — темнее, свод поднятия — светлее */
+      inRange: { color: ['#0d366b', '#256abf', '#5598e7', '#9ec5f4', '#cde2fb'] },
+    },
+    grid3D: {
+      boxWidth: 170, boxDepth: 130, boxHeight: 55,
+      environment: t.surface,
+      light: { main: { intensity: 1.15, shadow: false }, ambient: { intensity: 0.45 } },
+      viewControl: { distance: 220, alpha: 28, beta: 15 },
+    },
+    xAxis3D: { type: 'value', min: 0, max: 1400, ...base3dAxis(t, 'X, м') },
+    yAxis3D: { type: 'value', min: -600, max: 600, ...base3dAxis(t, 'Y, м') },
+    zAxis3D: { type: 'value', min: -2860, max: -2650, ...base3dAxis(t, 'а.о., м') },
+    series: [{
+      type: 'surface',
+      wireframe: { show: true, lineStyle: { color: 'rgba(11,11,11,0.08)', width: 0.5 } },
+      equation: {
+        x: { step: 25, min: 0, max: 1400 },
+        y: { step: 25, min: -600, max: 600 },
+        z: (x, y) => -2750
+          + 72 * Math.exp(-((x - 750) ** 2 + (y * 1.5) ** 2) / (2 * 380 ** 2))  /* купол */
+          - x * 0.035                                                            /* региональный наклон */
+          + 6 * Math.sin(x / 90) * Math.cos(y / 70),                             /* мелкая складчатость */
+      },
+    }],
+  });
+  return c;
+}
+
+function renderGauge(t) {
+  const el = document.getElementById('chart-gauge');
+  echarts.dispose(el);
+  const c = echarts.init(el, null, { renderer: 'svg' });
+  c.setOption({
+    series: [{
+      type: 'gauge', min: 0, max: 60, splitNumber: 6,
+      startAngle: 210, endAngle: -30,
+      radius: '95%', center: ['50%', '60%'],
+      axisLine: { lineStyle: { width: 12,
+        color: [[45 / 60, t.good], [52 / 60, t.warning], [1, t.serious]] } },
+      axisTick: { distance: -12, length: 4, lineStyle: { color: t.surface, width: 1 } },
+      splitLine: { distance: -12, length: 12, lineStyle: { color: t.surface, width: 2 } },
+      axisLabel: { color: t.muted, distance: 18, fontSize: 11 },
+      pointer: { length: '58%', width: 4, itemStyle: { color: t.ink2 } },
+      anchor: { show: true, size: 10, itemStyle: { color: t.ink2, borderColor: t.surface, borderWidth: 2 } },
+      detail: { formatter: '{value} МПа', color: t.ink, fontSize: 22, fontWeight: 600, offsetCenter: [0, '66%'] },
+      data: [{ value: 48.6 }],
+    }],
+  });
+  return c;
+}
+
+function renderDrops(t) {
+  const el = document.getElementById('chart-drops');
+  echarts.dispose(el);
+  const c = echarts.init(el, null, { renderer: 'svg' });
+  const drop = 'path://M24 4 C24 4 10 24 10 33 a14 14 0 0 0 28 0 C38 24 24 4 24 4 Z';
+  c.setOption({
+    grid: { left: 8, right: 52, top: 8, bottom: 0, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => p.name + '<br><b>' + p.value + '</b> тыс. барр./сут' },
+    xAxis: { type: 'value', max: 700, show: false },
+    yAxis: { type: 'category', data: fields.map(f => f.name),
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: t.ink2, fontSize: 13 } },
+    series: [
+      { /* фон: полный ряд бледных капель */
+        type: 'pictorialBar', symbol: drop,
+        symbolRepeat: 'fixed', symbolSize: [13, 16], symbolMargin: 2,
+        symbolBoundingData: 700,
+        data: fields.map(() => 700),
+        itemStyle: { color: t.grid },
+        silent: true, animation: false, z: 1,
+      },
+      { /* значение: закрашенные капли */
+        type: 'pictorialBar', symbol: drop,
+        symbolRepeat: 'fixed', symbolClip: true, symbolSize: [13, 16], symbolMargin: 2,
+        symbolBoundingData: 700,
+        data: fields.map(f => f.value),
+        itemStyle: { color: t.series[0] },
+        label: { show: true, position: 'right', offset: [8, 0], color: t.ink2, fontSize: 12 },
+        z: 2,
+      },
+    ],
+  });
+  return c;
+}
+
 /* ══════════════════════ таблицы ══════════════════════ */
 function fillTable(id, header, rows) {
   document.getElementById(id).innerHTML =
@@ -754,6 +970,9 @@ const panes = {
   } },
   'pane-frac': { inited: false, charts: [], render(t) {
     this.charts = [renderTreatment(t), renderMicroseismic(t), renderInflow(t), renderXf(t)];
+  } },
+  'pane-3d': { inited: false, charts: [], render(t) {
+    this.charts = [renderMs3d(t), renderSurface(t), renderGauge(t), renderDrops(t)];
   } },
 };
 function activePaneId() {
