@@ -112,6 +112,9 @@
         <li class="nav-item">
           <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-calc" type="button" role="tab">Калькулятор ГРП</button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-dfit" type="button" role="tab">DFIT-анализ</button>
+        </li>
       </ul>
       <ul class="navbar-nav me-auto d-none d-lg-flex">
         <li class="nav-item"><a class="nav-link" href="#">Скважины</a></li>
@@ -143,6 +146,9 @@
         </button>
         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-calc" type="button" role="tab">
           Калькулятор ГРП
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-dfit" type="button" role="tab">
+          DFIT-анализ
         </button>
       </div>
       <hr class="mx-2">
@@ -578,6 +584,69 @@
               <table class="table table-sm mt-2" id="table-npv"></table>
             </details>
           </div></div>
+        </div>
+
+        <!-- ════════ Вкладка 5: DFIT-анализ ════════ -->
+        <div class="tab-pane fade" id="pane-dfit" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">DFIT-анализ (мини-ГРП)</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Интерпретация кривой падения давления после остановки закачки: G-функция с полулогарифмической производной,
+            автоопределение давления смыкания методом касательной, диагностика √t и log-log.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Данные испытания</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              загрузите CSV с двумя колонками — «время от остановки, мин» и «давление, МПа» (разделитель — запятая или точка с запятой), либо используйте демо-данные
+            </div>
+            <form class="row g-3 align-items-end mb-2" id="dfitForm">
+              <div class="col-12 col-md-5 col-xl-4">
+                <label class="form-label" for="d-file">CSV с кривой падения</label>
+                <input class="form-control" type="file" id="d-file" accept=".csv,.txt">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="d-tp">Время закачки t<sub>p</sub>, мин</label>
+                <input type="number" class="form-control" id="d-tp" value="5" min="1" max="60" step="0.5">
+              </div>
+              <div class="col-6 col-md-4 col-xl-3">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="button" class="btn btn-outline-secondary" id="d-demo">Демо-данные</button>
+              </div>
+              <div class="col-12 col-xl-3">
+                <div class="footer-note" id="d-status"></div>
+              </div>
+            </form>
+            <div class="row g-3" id="dfit-tiles"></div>
+          </div></div>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">G-функция и производная G·dP/dG</h2>
+            <div class="text-body-secondary" style="font-size:13px">
+              при нормальных утечках производная лежит на прямой через начало координат; смыкание — точка отклонения вниз от касательной
+            </div>
+            <div id="chart-gfun" class="chart mt-2" style="height:460px"></div>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Диагностика √t</h2>
+                <div class="text-body-secondary" style="font-size:13px">до смыкания давление линейно по √t; излом — смыкание трещины</div>
+                <div id="chart-sqrt" class="chart mt-2" style="height:300px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Log-log диагностика</h2>
+                <div class="text-body-secondary" style="font-size:13px">ΔP = ISIP − P и производная t·dΔP/dt; наклон ½ — линейное течение</div>
+                <div id="chart-loglog" class="chart mt-2" style="height:300px"></div>
+              </div></div>
+            </div>
+          </div>
+          <details class="mt-3 mb-1">
+            <summary>Показать данные таблицей (каждая 20-я точка)</summary>
+            <table class="table table-sm mt-2" id="table-dfit"></table>
+          </details>
         </div>
 
       </div>
@@ -1539,6 +1608,211 @@ function renderNPV(t) {
   return [c1, c2];
 }
 
+/* ══════════════════════ DFIT-анализ ══════════════════════ */
+/* G-функция Нолте (приближение малых утечек) */
+function Gfun(dtD) {
+  const g = (4 / 3) * (Math.pow(1 + dtD, 1.5) - Math.pow(dtD, 1.5));
+  return (4 / Math.PI) * (g - 4 / 3);
+}
+/* демо-кривая: нормальные утечки до G=2, затем течение после смыкания */
+function dfitDemoRows() {
+  let s = 7;
+  const noise = () => { s = (s * 9301 + 49297) % 233280; return (s / 233280 - 0.5) * 0.06; };
+  const tp = 5, ISIP = 45.0, mG = 1.5, Gc = 2.0, b = 1.2;
+  const rows = [];
+  for (let t = 0.1; t <= 30; t += 0.1) {
+    const G = Gfun(t / tp);
+    /* до смыкания — нормальные утечки (линейно по G), после — затухающий спад:
+       производная непрерывна в точке смыкания и уходит ниже касательной */
+    const P = G <= Gc
+      ? ISIP - mG * G
+      : ISIP - mG * Gc - mG * b * (1 - Math.exp(-(G - Gc) / b));
+    rows.push({ t: +t.toFixed(2), P: +(P + noise()).toFixed(3) });
+  }
+  return { rows, tp };
+}
+let dfitState = { rows: dfitDemoRows().rows, source: 'демо-данные' };
+
+/* сглаженный наклон y(x) в окне ±win точек */
+function windowSlope(xs, ys, i, win) {
+  const a = Math.max(0, i - win), b = Math.min(xs.length - 1, i + win);
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0;
+  for (let j = a; j <= b; j++) { sx += xs[j]; sy += ys[j]; sxx += xs[j] * xs[j]; sxy += xs[j] * ys[j]; n++; }
+  const d = n * sxx - sx * sx;
+  return d === 0 ? 0 : (n * sxy - sx * sy) / d;
+}
+
+function analyzeDfit() {
+  const tp = num('d-tp');
+  const rows = dfitState.rows;
+  if (!rows || rows.length < 20) return null;
+  const pts = rows.map(r => ({ t: r.t, P: r.P, G: Gfun(r.t / tp) }));
+  const Gs = pts.map(p => p.G), Ps = pts.map(p => p.P);
+  const win = Math.max(3, Math.round(pts.length / 40));
+  pts.forEach((p, i) => { p.gdpdg = -windowSlope(Gs, Ps, i, win) * p.G; });
+  const ISIP = Math.max(...Ps.slice(0, Math.max(3, win)));
+  /* касательная через начало координат по раннему прямолинейному участку */
+  const early = pts.filter(p => p.G > 0.3 && p.G < 1.0 && p.gdpdg > 0);
+  if (!early.length) return null;
+  const slopes = early.map(p => p.gdpdg / p.G).sort((a, b) => a - b);
+  const m = slopes[Math.floor(slopes.length / 2)];
+  /* смыкание: устойчивое отклонение производной вниз от касательной */
+  let ic = -1;
+  for (let i = 0; i < pts.length - 5; i++) {
+    if (pts[i].G < 1.0) continue;
+    let below = true;
+    for (let j = i; j < i + 5; j++) if (pts[j].gdpdg >= 0.93 * m * pts[j].G) { below = false; break; }
+    if (below) { ic = i; break; }
+  }
+  const c = ic > 0 ? pts[ic] : null;
+  return { pts, ISIP, m, c,
+    eta: c ? c.G / (2 + c.G) : null };
+}
+
+function renderDfit(t) {
+  const a = analyzeDfit();
+  document.getElementById('d-status').textContent =
+    'Источник: ' + dfitState.source + ' · точек: ' + (dfitState.rows ? dfitState.rows.length : 0);
+  if (!a) {
+    document.getElementById('dfit-tiles').innerHTML =
+      '<div class="col-12"><div class="footer-note">Недостаточно данных для анализа (нужно ≥ 20 точек «время, давление»).</div></div>';
+    return [];
+  }
+  const { pts, ISIP, m, c, eta } = a;
+  document.getElementById('dfit-tiles').innerHTML =
+    tile('ISIP', ISIP.toFixed(1), 'МПа') +
+    tile('Давление смыкания P<sub>c</sub>', c ? c.P.toFixed(1) : '—', 'МПа',
+      c ? 'при G = ' + c.G.toFixed(2) : 'смыкание не найдено') +
+    tile('Время смыкания', c ? c.t.toFixed(1) : '—', 'мин', 'после остановки') +
+    tile('Эффективность жидкости', eta ? (eta * 100).toFixed(0) : '—', '%', 'η = G_c / (2 + G_c)');
+
+  /* G-функция: два синхронных грида — P(G) и G·dP/dG(G) с касательной */
+  const el1 = document.getElementById('chart-gfun');
+  echarts.dispose(el1);
+  const c1 = echarts.init(el1);
+  const Gmax = Math.ceil(pts[pts.length - 1].G * 10) / 10;
+  c1.setOption({
+    axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: t.baseline } },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) },
+    grid: [
+      { left: 8, right: 24, top: 30, height: '38%', containLabel: true },
+      { left: 8, right: 24, top: '56%', height: '32%', containLabel: true },
+    ],
+    xAxis: [0, 1].map(i => ({
+      type: 'value', gridIndex: i, min: 0, max: Gmax,
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, show: i === 1 },
+      name: i === 1 ? 'G' : '', nameTextStyle: { color: t.muted },
+    })),
+    yAxis: [
+      { type: 'value', gridIndex: 0, scale: true, name: 'P, МПа',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+      { type: 'value', gridIndex: 1, min: 0, name: 'G·dP/dG, МПа',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+    ],
+    series: [
+      { name: 'P', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false,
+        lineStyle: { width: 2, color: t.series[0] }, itemStyle: { color: t.series[0] },
+        data: pts.map(p => [+p.G.toFixed(3), p.P]),
+        ...(c ? { markPoint: {
+          symbol: 'circle', symbolSize: 10,
+          itemStyle: { color: t.series[0], borderColor: t.surface, borderWidth: 2 },
+          label: { color: t.ink2, fontSize: 12, position: 'right', distance: 8,
+            formatter: 'смыкание: ' + c.P.toFixed(1) + ' МПа' },
+          data: [{ coord: [+c.G.toFixed(3), c.P] }],
+        } } : {}) },
+      { name: 'G·dP/dG', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false,
+        lineStyle: { width: 2, color: t.series[1] }, itemStyle: { color: t.series[1] },
+        data: pts.map(p => [+p.G.toFixed(3), +p.gdpdg.toFixed(3)]) },
+      { name: 'Касательная', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false,
+        lineStyle: { width: 1, color: t.muted, type: 'dashed' }, itemStyle: { color: t.muted },
+        silent: true, data: [[0, 0], [Gmax, m * Gmax]],
+        ...(c ? { markLine: {
+          symbol: 'none', silent: true,
+          lineStyle: { color: t.baseline, width: 1 },
+          label: { color: t.ink2, fontSize: 12, formatter: 'G_c = ' + c.G.toFixed(2) },
+          data: [{ xAxis: +c.G.toFixed(3) }],
+        } } : {}) },
+    ],
+  });
+
+  /* √t */
+  const el2 = document.getElementById('chart-sqrt');
+  echarts.dispose(el2);
+  const c2 = echarts.init(el2);
+  c2.setOption({
+    grid: { left: 8, right: 24, top: 24, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) + ' МПа' },
+    xAxis: { type: 'value', name: '√t, мин^½', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', scale: true, ...baseAxis(t), axisLine: { show: false } },
+    series: [{
+      name: 'P', type: 'line', showSymbol: false,
+      lineStyle: { width: 2, color: t.series[0] }, itemStyle: { color: t.series[0] },
+      data: pts.map(p => [+Math.sqrt(p.t).toFixed(3), p.P]),
+      ...(c ? { markLine: {
+        symbol: 'none', silent: true,
+        lineStyle: { color: t.baseline, width: 1 },
+        label: { color: t.ink2, fontSize: 12, formatter: 'смыкание' },
+        data: [{ xAxis: +Math.sqrt(c.t).toFixed(3) }],
+      } } : {}) }],
+  });
+
+  /* log-log: ΔP и t·dΔP/dt */
+  const el3 = document.getElementById('chart-loglog');
+  echarts.dispose(el3);
+  const c3 = echarts.init(el3);
+  const ll = pts.filter(p => ISIP - p.P > 0.05 && p.t > 0);
+  const lnT = ll.map(p => Math.log(p.t)), dP = ll.map(p => ISIP - p.P);
+  const winL = Math.max(3, Math.round(ll.length / 40));
+  const der = ll.map((p, i) => windowSlope(lnT, dP, i, winL));
+  c3.setOption({
+    color: [t.series[0], t.series[1]],
+    grid: { left: 8, right: 52, top: 36, bottom: 8, containLabel: true },
+    legend: { ...baseLegend(t) },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) + ' МПа' },
+    xAxis: { type: 'log', name: 'Δt, мин', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'log', min: 0.01, ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: v => +v.toPrecision(1) } },
+    series: [
+      { name: 'ΔP = ISIP − P', type: 'line', showSymbol: false, lineStyle: { width: 2 },
+        data: ll.map(p => [p.t, +(ISIP - p.P).toFixed(3)]) },
+      { name: 't·dΔP/dt', type: 'line', showSymbol: false, lineStyle: { width: 2 },
+        data: ll.map((p, i) => [p.t, der[i] > 0.02 ? +der[i].toFixed(3) : null]),
+        ...(c ? { markLine: {
+          symbol: 'none', silent: true,
+          lineStyle: { color: t.baseline, width: 1 },
+          label: { color: t.ink2, fontSize: 12, formatter: 'смыкание' },
+          data: [{ xAxis: c.t }],
+        } } : {}) },
+    ],
+  });
+
+  fillTable('table-dfit', ['Δt, мин', 'P, МПа', 'G', 'G·dP/dG, МПа'],
+    pts.filter((_, i) => i % 20 === 0)
+       .map(p => [p.t.toFixed(1), p.P.toFixed(2), p.G.toFixed(3), p.gdpdg.toFixed(3)]));
+  return [c1, c2, c3];
+}
+
+/* загрузка CSV и демо-данные */
+function parseDfitCsv(text) {
+  const rows = [];
+  text.split(/\r?\n/).forEach(line => {
+    const parts = line.split(/[;,\t]/).map(s => parseFloat(s.replace(',', '.')));
+    if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+      rows.push({ t: parts[0], P: parts[1] });
+    }
+  });
+  rows.sort((a, b) => a.t - b.t);
+  return rows.filter(r => r.t > 0);
+}
+
 /* ══════════════════════ таблицы ══════════════════════ */
 function fillTable(id, header, rows) {
   document.getElementById(id).innerHTML =
@@ -1572,6 +1846,9 @@ const panes = {
   } },
   'pane-calc': { inited: false, charts: [], render(t) {
     this.charts = [...renderGeo(t), ...renderUFD(t), ...renderNPV(t)];
+  } },
+  'pane-dfit': { inited: false, charts: [], render(t) {
+    this.charts = renderDfit(t);
   } },
 };
 function activePaneId() {
@@ -1615,6 +1892,30 @@ document.getElementById('fracForm').addEventListener('submit', e => e.preventDef
     const fresh = fn(theme());
     p.charts.splice(offset, fresh.length, ...fresh);  /* заменяем пересозданные инстансы в реестре */
   });
+});
+
+/* DFIT: загрузка файла, демо-данные, изменение tp */
+function refreshDfit() {
+  const p = panes['pane-dfit'];
+  if (p.inited) p.charts = renderDfit(theme());
+}
+document.getElementById('dfitForm').addEventListener('submit', e => e.preventDefault());
+document.getElementById('d-tp').addEventListener('input', refreshDfit);
+document.getElementById('d-demo').addEventListener('click', () => {
+  dfitState = { rows: dfitDemoRows().rows, source: 'демо-данные' };
+  document.getElementById('d-file').value = '';
+  refreshDfit();
+});
+document.getElementById('d-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseDfitCsv(String(reader.result));
+    dfitState = { rows, source: file.name };
+    refreshDfit();
+  };
+  reader.readAsText(file);
 });
 
 window.addEventListener('resize', () => panes[activePaneId()].charts.forEach(c => c.resize()));
