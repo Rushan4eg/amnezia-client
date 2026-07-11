@@ -115,6 +115,9 @@
         <li class="nav-item">
           <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-dfit" type="button" role="tab">DFIT-анализ</button>
         </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-van" type="button" role="tab">Пультовая ГРП</button>
+        </li>
       </ul>
       <ul class="navbar-nav me-auto d-none d-lg-flex">
         <li class="nav-item"><a class="nav-link" href="#">Скважины</a></li>
@@ -149,6 +152,9 @@
         </button>
         <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-dfit" type="button" role="tab">
           DFIT-анализ
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-van" type="button" role="tab">
+          Пультовая ГРП
         </button>
       </div>
       <hr class="mx-2">
@@ -647,6 +653,107 @@
             <summary>Показать данные таблицей (каждая 20-я точка)</summary>
             <table class="table table-sm mt-2" id="table-dfit"></table>
           </details>
+        </div>
+
+        <!-- ════════ Вкладка 6: Пультовая ГРП ════════ -->
+        <div class="tab-pane fade" id="pane-van" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Пультовая ГРП — мониторинг в реальном времени</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Имитация станции контроля: кривая ГРП рисуется потоком, анализ Нолте—Смита классифицирует режим распространения трещины,
+            алерты предупреждают о риске СТОПа. Давление смыкания P<sub>c</sub> = 42,5 МПа (из DFIT), предел колонны — 56 МПа.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <form class="row g-3 align-items-end" id="vanForm">
+              <div class="col-12 col-md-4 col-xl-3">
+                <label class="form-label" for="v-scn">Сценарий стадии</label>
+                <select class="form-select" id="v-scn">
+                  <option value="normal" selected>Нормальная стадия</option>
+                  <option value="screenout">Экранирование (риск СТОПа)</option>
+                  <option value="height">Прорыв по высоте</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="v-speed">Скорость</label>
+                <select class="form-select" id="v-speed">
+                  <option value="30">×30</option>
+                  <option value="90" selected>×90</option>
+                  <option value="240">×240</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-5 col-xl-4">
+                <label class="form-label d-block">&nbsp;</label>
+                <div class="btn-group" role="group" aria-label="Управление имитацией">
+                  <button type="button" class="btn btn-primary" id="v-start">▶ Старт</button>
+                  <button type="button" class="btn btn-outline-secondary" id="v-pause">⏸ Пауза</button>
+                  <button type="button" class="btn btn-outline-secondary" id="v-reset">⟲ Сброс</button>
+                </div>
+              </div>
+              <div class="col-12 col-xl-3 text-xl-end">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="button" class="btn btn-outline-secondary" id="v-export">⭳ Выгрузить CSV</button>
+              </div>
+            </form>
+          </div></div>
+
+          <div class="row g-3 mb-3" id="van-tiles">
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Время закачки</div>
+                <div class="value" style="font-size:22px"><span id="van-t">0.0</span> <span class="unit" style="font-size:13px">мин</span></div>
+              </div></div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Давление (забой)</div>
+                <div class="value" style="font-size:22px"><span id="van-P">—</span> <span class="unit" style="font-size:13px">МПа</span></div>
+              </div></div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Расход</div>
+                <div class="value" style="font-size:22px"><span id="van-rate">—</span> <span class="unit" style="font-size:13px">м³/мин</span></div>
+              </div></div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Закачано пропанта</div>
+                <div class="value" style="font-size:22px"><span id="van-cum">0</span> <span class="unit" style="font-size:13px">т</span></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-8 col-xl-3">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Режим Нолте—Смита</div>
+                <div class="value" style="font-size:18px" id="van-mode">ожидание</div>
+                <div class="delta" id="van-slope"></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Кривая ГРП — реальное время</h2>
+            <div class="text-body-secondary" style="font-size:13px">забойное давление, расход, концентрация пропанта</div>
+            <div id="chart-van" class="chart treatment mt-2"></div>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-7">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Анализ Нолте—Смита</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  чистое давление p<sub>net</sub> = P − P<sub>c</sub> в log-log: наклон ~0,15 — нормальный рост; наклон ≥ 1 — экранирование; падение — рост высоты/прорыв
+                </div>
+                <div id="chart-ns" class="chart mt-2" style="height:320px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-5">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Журнал событий</h2>
+                <div class="text-body-secondary mb-2" style="font-size:13px">алерты и статусы стадии, новые сверху</div>
+                <ul class="list-unstyled mb-0" id="van-log" style="max-height:300px; overflow-y:auto; font-size:13px"></ul>
+              </div></div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -1813,6 +1920,224 @@ function parseDfitCsv(text) {
   return rows.filter(r => r.t > 0);
 }
 
+/* ══════════════════════ пультовая ГРП ══════════════════════ */
+const VAN_PC = 42.5, VAN_LIMIT = 56, VAN_WARN = 54;
+
+/* генератор сценария: полный ряд {t, P, rate, prop}, шаг 0,1 мин */
+function genVanRows(kind) {
+  let s = 11;
+  const noise = () => { s = (s * 9301 + 49297) % 233280; return (s / 233280 - 0.5) * 0.35; };
+  const stopT = kind === 'screenout' ? 76 : 80;
+  const rows = [];
+  let Pstop = null;
+  for (let t = 0; t <= 90; t += 0.1) {
+    let rate, prop, P;
+    rate = t < 5 ? 2 * t : (t < stopT ? 10 + 0.15 * Math.sin(t / 3) : 0);
+    prop = (t >= 20 && t < stopT) ? Math.min(600, 100 + Math.floor((t - 20) / 8) * 80) : 0;
+    if (kind === 'screenout' && t >= 55 && t < stopT) prop = Math.min(760, prop + 8 * (t - 55));
+    if (t < 5)      P = 30 + t / 5 * 27;
+    else if (t < 8) P = 57 - (t - 5) / 3 * 8.5;
+    else if (t < stopT) {
+      let pnet = 5.5 * Math.pow((t - 4) / 10, 0.15);
+      if (kind === 'screenout' && t > 55) pnet += 0.09 * Math.pow(t - 55, 1.4);
+      if (kind === 'height' && t > 50)    pnet -= Math.min(4, 0.45 * (t - 50));
+      P = VAN_PC + pnet;
+      Pstop = P;
+    } else {
+      P = VAN_PC + 2 + (Pstop - VAN_PC - 2) * Math.exp(-(t - stopT) / 7);
+    }
+    rows.push({ t: +t.toFixed(1), P: +(P + noise()).toFixed(2),
+      rate: +rate.toFixed(2), prop: Math.round(prop) });
+  }
+  return { rows, stopT };
+}
+
+const van = {
+  scenario: 'normal', rows: [], stopT: 80, i: 0,
+  timer: null, log: [], flags: {}, cumProp: 0,
+};
+function vanReset() {
+  clearInterval(van.timer); van.timer = null;
+  van.scenario = document.getElementById('v-scn').value;
+  const g = genVanRows(van.scenario);
+  van.rows = g.rows; van.stopT = g.stopT;
+  van.i = 0; van.log = []; van.flags = {}; van.cumProp = 0;
+  vanLogAdd(0, 'good', 'Готово к запуску: сценарий «' +
+    document.getElementById('v-scn').selectedOptions[0].text + '»');
+  if (panes['pane-van'].inited) panes['pane-van'].render(theme());
+}
+function vanLogPaint() {
+  const colors = { good: 'var(--status-good)', warning: 'var(--status-warning)',
+    serious: 'var(--status-serious)', critical: '#d03b3b' };
+  const el = document.getElementById('van-log');
+  if (el) el.innerHTML = van.log.map(e =>
+    '<li class="mb-1"><span style="color:' + colors[e.level] + '">●</span> ' +
+    '<span class="text-body-secondary">[' + e.t.toFixed(1) + ' мин]</span> ' + e.msg + '</li>').join('');
+}
+function vanLogAdd(t, level, msg) {
+  van.log.unshift({ t, level, msg });
+  if (van.log.length > 60) van.log.pop();
+  vanLogPaint();
+}
+
+/* наклон Нолте—Смита: ln(pnet) от ln(t−4) в скользящем окне 10 мин */
+function vanSlope(idx) {
+  const w = [];
+  for (let j = idx; j >= 0 && van.rows[idx].t - van.rows[j].t <= 10; j--) {
+    const r = van.rows[j];
+    if (r.t > 9 && r.rate > 1 && r.P - VAN_PC > 0.3) w.push(r);
+  }
+  if (w.length < 12) return null;
+  const xs = w.map(r => Math.log(r.t - 4)), ys = w.map(r => Math.log(r.P - VAN_PC));
+  return windowSlope(xs, ys, Math.floor(xs.length / 2), xs.length);
+}
+function vanMode(slope) {
+  if (slope === null) return ['ожидание', '', 'good'];
+  if (slope > 0.85)  return ['III — экранирование', 'наклон ' + slope.toFixed(2), 'serious'];
+  if (slope > 0.45)  return ['II→III — рост сопротивления', 'наклон ' + slope.toFixed(2), 'warning'];
+  if (slope > -0.1)  return ['I–II — нормальный рост', 'наклон ' + slope.toFixed(2), 'good'];
+  return ['IV — рост высоты / прорыв', 'наклон ' + slope.toFixed(2), 'serious'];
+}
+
+/* алерты — по факту перехода порога */
+function vanAlerts(idx, slope) {
+  const r = van.rows[idx], f = van.flags;
+  const once = (key, level, msg) => { if (!f[key]) { f[key] = true; vanLogAdd(r.t, level, msg); } };
+  if (r.t >= 0.1) once('start', 'good', 'Закачка начата');
+  if (r.t >= 5.1) once('breakdown', 'good', 'Разрыв пласта: пик ~57 МПа, давление распространения ~48 МПа');
+  if (r.prop > 0) once('prop', 'good', 'Начата подача пропанта');
+  if (slope !== null && slope > 0.85 && r.rate > 1)
+    once('screenout', 'serious', 'Наклон Нолте—Смита ' + slope.toFixed(2) +
+      ' (≈1 и выше) — признак экранирования. Рекомендация: снизить концентрацию пропанта, поднять расход');
+  if (slope !== null && slope < -0.1 && r.rate > 1)
+    once('height', 'serious', 'Падение p_net при постоянном расходе — неконтролируемый рост высоты или прорыв в соседний интервал');
+  /* пик разрыва пласта (t≈5 мин) — не алерт, пороги проверяем после выхода на режим */
+  if (r.t > 10 && r.P >= VAN_WARN && r.rate > 1)
+    once('pwarn', 'warning', 'Давление ' + r.P.toFixed(1) + ' МПа — приближение к пределу колонны (' + VAN_LIMIT + ' МПа)');
+  if (r.t > 10 && r.P >= VAN_LIMIT && r.rate > 1)
+    once('pcrit', 'critical', 'Достигнут предел ' + VAN_LIMIT + ' МПа — аварийная остановка (СТОП)');
+  if (r.rate === 0 && r.t > 5) once('shutin', 'good', 'Насосы остановлены, фиксируем ISIP и кривую падения');
+  if (idx === van.rows.length - 1) once('end', 'good', 'Стадия завершена');
+}
+
+function vanUpdate() {
+  const idx = Math.min(van.i, van.rows.length - 1);
+  const r = van.rows[idx];
+  const revealed = van.rows.slice(0, idx + 1);
+  /* плитки */
+  document.getElementById('van-t').textContent = r.t.toFixed(1);
+  document.getElementById('van-P').textContent = r.P.toFixed(1);
+  document.getElementById('van-rate').textContent = r.rate.toFixed(1);
+  van.cumProp = revealed.reduce((a, x) => a + x.prop * x.rate / 1000 * 0.1, 0);
+  document.getElementById('van-cum').textContent = van.cumProp.toFixed(1);
+  const slope = vanSlope(idx);
+  const [mode, sl, lvl] = vanMode(slope);
+  const colors = { good: 'var(--status-good)', warning: 'var(--status-warning)', serious: 'var(--status-serious)' };
+  document.getElementById('van-mode').innerHTML =
+    '<span style="color:' + colors[lvl] + '">●</span> ' + mode;
+  document.getElementById('van-slope').textContent = sl;
+  vanAlerts(idx, slope);
+  /* графики — обновляем данные существующих инстансов */
+  const cv = echarts.getInstanceByDom(document.getElementById('chart-van'));
+  if (cv) cv.setOption({ series: [
+    { data: revealed.map(x => [x.t, x.P]) },
+    { data: revealed.map(x => [x.t, x.rate]) },
+    { data: revealed.map(x => [x.t, x.prop]) },
+  ] });
+  const cn = echarts.getInstanceByDom(document.getElementById('chart-ns'));
+  if (cn) cn.setOption({ series: [
+    { data: revealed.filter(x => x.t > 9 && x.rate > 1 && x.P - VAN_PC > 0.3)
+        .map(x => [+(x.t - 4).toFixed(1), +(x.P - VAN_PC).toFixed(2)]) },
+  ] });
+}
+
+function renderVan(t) {
+  if (!van.rows.length) vanReset();
+  /* стриминговая кривая ГРП: три синхронные панели с фиксированной осью времени */
+  const el1 = document.getElementById('chart-van');
+  echarts.dispose(el1);
+  const c1 = echarts.init(el1);
+  const panels = [
+    { name: 'Давление (забой)', unit: 'МПа', col: t.series[0], max: 62 },
+    { name: 'Расход', unit: 'м³/мин', col: t.series[1], max: 12 },
+    { name: 'Конц. пропанта', unit: 'кг/м³', col: t.series[2], max: 800 },
+  ];
+  c1.setOption({
+    animation: false,
+    axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: t.baseline } },
+    tooltip: { ...baseTooltip(t), trigger: 'axis' },
+    grid: [
+      { left: 8, right: 32, top: 30, height: '32%', containLabel: true },
+      { left: 8, right: 32, top: '45%', height: '19%', containLabel: true },
+      { left: 8, right: 32, top: '71%', height: '19%', containLabel: true },
+    ],
+    xAxis: panels.map((p, i) => ({
+      type: 'value', gridIndex: i, min: 0, max: 90,
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, show: i === 2, formatter: '{value} мин' },
+    })),
+    yAxis: panels.map((p, i) => ({
+      type: 'value', gridIndex: i, max: p.max,
+      name: p.name + ', ' + p.unit,
+      nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+      ...baseAxis(t), axisLine: { show: false },
+    })),
+    series: panels.map((p, i) => ({
+      name: p.name, type: 'line',
+      xAxisIndex: i, yAxisIndex: i, data: [],
+      lineStyle: { width: 2, color: p.col, cap: 'round' },
+      itemStyle: { color: p.col },
+      symbol: 'none', emphasis: { disabled: true },
+      tooltip: { valueFormatter: v => v + ' ' + p.unit },
+      ...(i === 0 ? { markLine: {
+        symbol: 'none', silent: true,
+        lineStyle: { color: t.serious, width: 1, type: 'dashed' },
+        label: { color: t.ink2, fontSize: 11, position: 'insideEndTop',
+          formatter: 'предел колонны ' + VAN_LIMIT + ' МПа' },
+        data: [{ yAxis: VAN_LIMIT }],
+      } } : {}),
+    })),
+  });
+  /* Нолте—Смит: log-log p_net с направляющими наклонов */
+  const el2 = document.getElementById('chart-ns');
+  echarts.dispose(el2);
+  const c2 = echarts.init(el2);
+  c2.setOption({
+    animation: false,
+    grid: { left: 8, right: 48, top: 24, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) + ' МПа' },
+    xAxis: { type: 'log', min: 4, max: 90, name: 't − 4, мин', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'log', min: 1, max: 30, name: 'p_net, МПа', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: v => +v.toPrecision(1) } },
+    series: [
+      { name: 'p_net', type: 'line', showSymbol: false,
+        lineStyle: { width: 2, color: t.series[0] }, itemStyle: { color: t.series[0] }, data: [] },
+      { name: 'наклон ~0.15 (норма)', type: 'line', showSymbol: false, silent: true,
+        lineStyle: { width: 1, color: t.muted, type: 'dashed' }, itemStyle: { color: t.muted },
+        data: [[4, 4.6], [90, 4.6 * Math.pow(90 / 4, 0.15)]],
+        endLabel: { show: true, formatter: '0.15', color: t.muted, fontSize: 11 } },
+      { name: 'наклон 1 (экранирование)', type: 'line', showSymbol: false, silent: true,
+        lineStyle: { width: 1, color: t.serious, type: 'dashed' }, itemStyle: { color: t.serious },
+        data: [[40, 6], [90, 6 * 90 / 40]],
+        endLabel: { show: true, formatter: '1', color: t.serious, fontSize: 11 } },
+    ],
+  });
+  vanLogPaint();
+  vanUpdate();
+  return [c1, c2];
+}
+
+/* управление имитацией */
+function vanTick() {
+  const steps = Math.max(1, Math.round(+document.getElementById('v-speed').value / 30));
+  van.i = Math.min(van.i + steps, van.rows.length - 1);
+  vanUpdate();
+  if (van.i >= van.rows.length - 1) { clearInterval(van.timer); van.timer = null; }
+}
+
 /* ══════════════════════ таблицы ══════════════════════ */
 function fillTable(id, header, rows) {
   document.getElementById(id).innerHTML =
@@ -1849,6 +2174,9 @@ const panes = {
   } },
   'pane-dfit': { inited: false, charts: [], render(t) {
     this.charts = renderDfit(t);
+  } },
+  'pane-van': { inited: false, charts: [], render(t) {
+    this.charts = renderVan(t);
   } },
 };
 function activePaneId() {
@@ -1916,6 +2244,30 @@ document.getElementById('d-file').addEventListener('change', e => {
     refreshDfit();
   };
   reader.readAsText(file);
+});
+
+/* пультовая: управление имитацией */
+document.getElementById('vanForm').addEventListener('submit', e => e.preventDefault());
+document.getElementById('v-start').addEventListener('click', () => {
+  if (!van.timer && van.rows.length) {
+    if (van.i >= van.rows.length - 1) vanReset();
+    van.timer = setInterval(vanTick, 200);
+  }
+});
+document.getElementById('v-pause').addEventListener('click', () => {
+  clearInterval(van.timer); van.timer = null;
+});
+document.getElementById('v-reset').addEventListener('click', vanReset);
+document.getElementById('v-scn').addEventListener('change', vanReset);
+document.getElementById('v-export').addEventListener('click', () => {
+  const rows = van.rows.slice(0, van.i + 1);
+  const csv = 't_min,P_MPa,rate_m3min,prop_kgm3\n' +
+    rows.map(r => [r.t, r.P, r.rate, r.prop].join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'frac-stage-realtime.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 });
 
 window.addEventListener('resize', () => panes[activePaneId()].charts.forEach(c => c.resize()));
