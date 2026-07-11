@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Добыча нефти — панель мониторинга</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  :root {
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11, 11, 11, 0.10);
+    --delta-good:     #006300;
+    --series-1:       #2a78d6;  /* синий  — Западная Сибирь / основной */
+    --series-2:       #1baf7a;  /* аква   — Волго-Урал / ШГН */
+    --series-3:       #eda100;  /* жёлтый — Восточная Сибирь / фонтанный */
+    --series-4:       #4a3aa7;  /* фиолет — газлифт */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255, 255, 255, 0.10);
+      --delta-good:     #0ca30c;
+      --series-1:       #3987e5;
+      --series-2:       #199e70;
+      --series-3:       #c98500;
+      --series-4:       #9085e9;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 32px 24px 48px;
+  }
+
+  .dashboard { max-width: 1180px; margin: 0 auto; }
+
+  header h1 { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
+  header p  { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .tile .label { font-size: 13px; color: var(--text-secondary); }
+  .tile .value { font-size: 28px; font-weight: 600; margin-top: 6px; }
+  .tile.hero .value { font-size: 48px; }
+  .tile .delta { font-size: 13px; margin-top: 4px; color: var(--text-secondary); }
+  .tile .delta.up { color: var(--delta-good); }
+
+  .cards { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 860px) { .row-2 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 20px 8px;
+  }
+  .card h2 { font-size: 16px; font-weight: 600; }
+  .card .sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .chart { width: 100%; height: 340px; margin-top: 8px; }
+  .chart.tall { height: 380px; }
+
+  details { margin: 4px 0 12px; }
+  summary {
+    font-size: 13px; color: var(--text-secondary);
+    cursor: pointer; padding: 6px 0; user-select: none;
+  }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px; margin: 4px 0 8px;
+  }
+  th, td {
+    text-align: right; padding: 6px 10px;
+    border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-secondary); font-weight: 500; }
+
+  footer { margin-top: 20px; font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <header>
+    <h1>Добыча нефти</h1>
+    <p>Панель мониторинга добычи из недр — регионы, способы эксплуатации, месторождения. Демонстрационные данные.</p>
+  </header>
+
+  <!-- Плитки показателей -->
+  <div class="tiles">
+    <div class="tile hero">
+      <div class="label">Добыча за сутки</div>
+      <div class="value">10,8 <span style="font-size:20px; font-weight:500; color:var(--text-secondary)">млн барр.</span></div>
+      <div class="delta up">▲ +1,9 % к прошлому месяцу</div>
+    </div>
+    <div class="tile">
+      <div class="label">Действующий фонд скважин</div>
+      <div class="value">6 240</div>
+      <div class="delta">▲ +38 за квартал</div>
+    </div>
+    <div class="tile">
+      <div class="label">Средняя глубина скважины</div>
+      <div class="value">2 840 <span style="font-size:16px; font-weight:500; color:var(--text-secondary)">м</span></div>
+      <div class="delta">без изменений</div>
+    </div>
+    <div class="tile">
+      <div class="label">Обводнённость продукции</div>
+      <div class="value">84,2 <span style="font-size:16px; font-weight:500; color:var(--text-secondary)">%</span></div>
+      <div class="delta">▲ +0,6 п.п. за год</div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <!-- График 1: добыча по регионам -->
+    <div class="card">
+      <h2>Годовая добыча по регионам</h2>
+      <div class="sub">млн тонн, 2016–2025</div>
+      <div id="chart-regions" class="chart tall"></div>
+      <details>
+        <summary>Показать данные таблицей</summary>
+        <table id="table-regions"></table>
+      </details>
+    </div>
+
+    <div class="row-2">
+      <!-- График 2: способы добычи -->
+      <div class="card">
+        <h2>Структура добычи по способам</h2>
+        <div class="sub">доля способа эксплуатации скважин, %</div>
+        <div id="chart-methods" class="chart"></div>
+        <details>
+          <summary>Показать данные таблицей</summary>
+          <table id="table-methods"></table>
+        </details>
+      </div>
+
+      <!-- График 3: месторождения -->
+      <div class="card">
+        <h2>Крупнейшие месторождения</h2>
+        <div class="sub">среднесуточная добыча, тыс. барр./сут</div>
+        <div id="chart-fields" class="chart"></div>
+        <details>
+          <summary>Показать данные таблицей</summary>
+          <table id="table-fields"></table>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <footer>Данные синтетические и приведены для демонстрации макета. Построено на Apache ECharts.</footer>
+</div>
+
+<script>
+/* ---------- данные (демо) ---------- */
+const years = ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025'];
+
+const regions = [
+  { name: 'Западная Сибирь',  data: [316, 314, 318, 320, 302, 306, 310, 304, 299, 295] },
+  { name: 'Волго-Урал',       data: [112, 113, 115, 116, 108, 110, 112, 111, 110, 109] },
+  { name: 'Восточная Сибирь', data: [ 46,  50,  55,  59,  57,  62,  67,  71,  75,  78] },
+];
+
+const methodYears = ['2021','2022','2023','2024','2025'];
+const methods = [
+  { name: 'ЭЦН (насосный)', data: [74, 75, 76, 77, 78] },
+  { name: 'ШГН (штанговый)', data: [12, 11.5, 11, 10.5, 10] },
+  { name: 'Фонтанный',       data: [8, 7.8, 7.5, 7.2, 7] },
+  { name: 'Газлифт',         data: [6, 5.7, 5.5, 5.3, 5] },
+];
+
+const fields = [
+  { name: 'Приобское',     value: 700 },
+  { name: 'Самотлорское',  value: 605 },
+  { name: 'Ванкорское',    value: 420 },
+  { name: 'Ромашкинское',  value: 300 },
+  { name: 'Фёдоровское',   value: 255 },
+  { name: 'Русское',       value: 150 },
+].sort((a, b) => a.value - b.value);
+
+/* ---------- тема из CSS-переменных ---------- */
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function theme() {
+  return {
+    surface:  cssVar('--surface-1'),
+    ink:      cssVar('--text-primary'),
+    ink2:     cssVar('--text-secondary'),
+    muted:    cssVar('--text-muted'),
+    grid:     cssVar('--gridline'),
+    baseline: cssVar('--baseline'),
+    border:   cssVar('--border'),
+    series: [cssVar('--series-1'), cssVar('--series-2'), cssVar('--series-3'), cssVar('--series-4')],
+  };
+}
+
+function baseAxis(t) {
+  return {
+    axisLine:  { lineStyle: { color: t.baseline } },
+    axisTick:  { show: false },
+    axisLabel: { color: t.muted, fontSize: 12 },
+    splitLine: { lineStyle: { color: t.grid, width: 1, type: 'solid' } },
+  };
+}
+
+function baseTooltip(t) {
+  return {
+    backgroundColor: t.surface,
+    borderColor: t.border,
+    borderWidth: 1,
+    padding: [10, 14],
+    textStyle: { color: t.ink, fontSize: 13 },
+    extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.12); border-radius: 8px;',
+  };
+}
+
+function baseLegend(t) {
+  return {
+    top: 0, right: 0,
+    icon: 'circle', itemWidth: 10, itemHeight: 10, itemGap: 18,
+    textStyle: { color: t.ink2, fontSize: 13 },
+  };
+}
+
+/* ---------- график 1: линии по регионам ---------- */
+function renderRegions(t) {
+  const el = document.getElementById('chart-regions');
+  echarts.dispose(el);
+  const chart = echarts.init(el);
+  chart.setOption({
+    color: t.series,
+    grid: { left: 8, right: 150, top: 36, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: {
+      ...baseTooltip(t),
+      trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: t.baseline, width: 1 } },
+      valueFormatter: v => v + ' млн т',
+    },
+    xAxis: { type: 'category', boundaryGap: false, data: years, ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', max: 400, ...baseAxis(t), axisLine: { show: false } },
+    series: regions.map(r => ({
+      name: r.name,
+      type: 'line',
+      data: r.data,
+      lineStyle: { width: 2, cap: 'round', join: 'round' },
+      symbol: 'circle',
+      symbolSize: 8,
+      showSymbol: false,
+      itemStyle: { borderColor: t.surface, borderWidth: 2 },
+      emphasis: { focus: 'series' },
+      endLabel: {
+        show: true,
+        formatter: p => r.name + '  ' + p.value,
+        color: t.ink2,
+        fontSize: 12,
+        distance: 8,
+      },
+    })),
+  });
+  return chart;
+}
+
+/* ---------- график 2: стек по способам добычи ---------- */
+function renderMethods(t) {
+  const el = document.getElementById('chart-methods');
+  echarts.dispose(el);
+  const chart = echarts.init(el);
+  chart.setOption({
+    color: t.series,
+    grid: { left: 8, right: 8, top: 56, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: {
+      ...baseTooltip(t),
+      trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { opacity: 0.06 } },
+      valueFormatter: v => v + ' %',
+    },
+    xAxis: { type: 'category', data: methodYears, ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', max: 100, ...baseAxis(t), axisLine: { show: false }, axisLabel: { color: t.muted, fontSize: 12, formatter: '{value} %' } },
+    series: methods.map((m, i) => ({
+      name: m.name,
+      type: 'bar',
+      stack: 'total',
+      barMaxWidth: 24,
+      data: m.data,
+      /* 2px зазор цветом поверхности между сегментами стека */
+      itemStyle: {
+        borderColor: t.surface,
+        borderWidth: 1,
+        borderRadius: i === methods.length - 1 ? [4, 4, 0, 0] : 0,
+      },
+      emphasis: { focus: 'series' },
+    })),
+  });
+  return chart;
+}
+
+/* ---------- график 3: горизонтальные бары месторождений ---------- */
+function renderFields(t) {
+  const el = document.getElementById('chart-fields');
+  echarts.dispose(el);
+  const chart = echarts.init(el);
+  chart.setOption({
+    grid: { left: 8, right: 56, top: 12, bottom: 8, containLabel: true },
+    tooltip: {
+      ...baseTooltip(t),
+      trigger: 'item',
+      formatter: p => p.name + '<br>' + '<b>' + p.value + '</b> тыс. барр./сут',
+    },
+    xAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    yAxis: {
+      type: 'category',
+      data: fields.map(f => f.name),
+      ...baseAxis(t),
+      splitLine: { show: false },
+      axisLabel: { color: t.ink2, fontSize: 13 },
+    },
+    series: [{
+      type: 'bar',
+      data: fields.map(f => f.value),
+      barMaxWidth: 20,
+      itemStyle: { color: t.series[0], borderRadius: [0, 4, 4, 0] },
+      label: {
+        show: true,
+        position: 'right',
+        color: t.ink2,
+        fontSize: 12,
+        distance: 6,
+      },
+    }],
+  });
+  return chart;
+}
+
+/* ---------- таблицы (доступность) ---------- */
+function fillTable(id, header, rows) {
+  document.getElementById(id).innerHTML =
+    '<tr>' + header.map(h => '<th>' + h + '</th>').join('') + '</tr>' +
+    rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('');
+}
+
+fillTable('table-regions', ['Год', ...regions.map(r => r.name)],
+  years.map((y, i) => [y, ...regions.map(r => r.data[i])]));
+
+fillTable('table-methods', ['Год', ...methods.map(m => m.name)],
+  methodYears.map((y, i) => [y, ...methods.map(m => m.data[i] + ' %')]));
+
+fillTable('table-fields', ['Месторождение', 'тыс. барр./сут'],
+  [...fields].reverse().map(f => [f.name, f.value]));
+
+/* ---------- инициализация и переключение темы ---------- */
+let charts = [];
+function renderAll() {
+  const t = theme();
+  charts = [renderRegions(t), renderMethods(t), renderFields(t)];
+}
+renderAll();
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+window.addEventListener('resize', () => charts.forEach(c => c.resize()));
+</script>
+</body>
+</html>
