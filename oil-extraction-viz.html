@@ -1,0 +1,2710 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мониторинг добычи и трещин МГРП</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛢</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts-gl@2.0.9/dist/echarts-gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/js/world.js"></script>
+<style>
+  :root, [data-bs-theme="light"] {
+    --bs-body-bg: #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted-viz: #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border-viz:     rgba(11, 11, 11, 0.10);
+    --delta-good:     #006300;
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+    --series-1:       #2a78d6;  /* синий  */
+    --series-2:       #1baf7a;  /* аква   */
+    --series-3:       #eda100;  /* жёлтый */
+    --series-4:       #4a3aa7;  /* фиолет */
+    --ramp-lo:        #86b6ef;  /* ординальная шкала стадий */
+    --ramp-hi:        #0d366b;
+  }
+  [data-bs-theme="dark"] {
+    --bs-body-bg: #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted-viz: #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border-viz:     rgba(255, 255, 255, 0.10);
+    --delta-good:     #0ca30c;
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+    --series-1:       #3987e5;
+    --series-2:       #199e70;
+    --series-3:       #c98500;
+    --series-4:       #9085e9;
+    --ramp-lo:        #9ec5f4;
+    --ramp-hi:        #184f95;
+  }
+
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+  .card {
+    --bs-card-bg: var(--surface-1);
+    --bs-card-border-color: var(--border-viz);
+    border-radius: 12px;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 72px;
+    height: calc(100vh - 72px);
+  }
+  .sidebar .nav-link { text-align: left; }
+
+  .tile .label { font-size: 13px; color: var(--text-secondary); }
+  .tile .value { font-size: 26px; font-weight: 600; }
+  .tile.hero .value { font-size: 44px; }
+  .tile .unit  { font-size: 15px; font-weight: 500; color: var(--text-secondary); }
+  .tile .delta { font-size: 13px; color: var(--text-secondary); }
+  .tile .delta.up { color: var(--delta-good); }
+
+  .chart { width: 100%; height: 340px; }
+  .chart.tall { height: 400px; }
+  .chart.treatment { height: 480px; }
+
+  details summary {
+    font-size: 13px; color: var(--text-secondary);
+    cursor: pointer; user-select: none;
+  }
+  .table { font-size: 13px; }
+  .table td, .table th { font-variant-numeric: tabular-nums; text-align: right; }
+  .table td:first-child, .table th:first-child { text-align: left; }
+
+  .footer-note { font-size: 12px; color: var(--text-muted-viz); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ Верхний навбар ══════════════ -->
+<nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom sticky-top" style="z-index: 1030;">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-semibold" href="#">🛢 НефтеМониторинг</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav"
+            aria-controls="topNav" aria-expanded="false" aria-label="Показать меню">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="topNav">
+      <!-- дублирующая навигация по вкладкам для мобильных -->
+      <ul class="navbar-nav me-auto d-lg-none" id="mobileNav" role="tablist">
+        <li class="nav-item">
+          <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pane-production" type="button" role="tab">Добыча нефти</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-frac" type="button" role="tab">Трещины МГРП</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-3d" type="button" role="tab">3D и SVG</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-calc" type="button" role="tab">Калькулятор ГРП</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-dfit" type="button" role="tab">DFIT-анализ</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-van" type="button" role="tab">Пультовая ГРП</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-comp" type="button" role="tab">Сравнение скважин</button>
+        </li>
+      </ul>
+      <ul class="navbar-nav me-auto d-none d-lg-flex">
+        <li class="nav-item"><a class="nav-link" href="#">Скважины</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" id="navReport">Отчёт PDF</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Справочники</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-3">
+        <span class="navbar-text footer-note d-none d-md-inline">Обновлено сегодня, 06:00 МСК</span>
+        <button class="btn btn-outline-secondary btn-sm" id="themeToggle" type="button" title="Переключить тему">🌓 Тема</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid">
+  <div class="row">
+
+    <!-- ══════════════ Боковой навбар ══════════════ -->
+    <aside class="col-lg-2 d-none d-lg-block border-end bg-body-tertiary sidebar pt-3">
+      <div class="nav nav-pills flex-column gap-1 px-2" id="sideNav" role="tablist" aria-orientation="vertical">
+        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pane-production" type="button" role="tab">
+          Добыча нефти
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-frac" type="button" role="tab">
+          Трещины МГРП
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-3d" type="button" role="tab">
+          3D и SVG
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-calc" type="button" role="tab">
+          Калькулятор ГРП
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-dfit" type="button" role="tab">
+          DFIT-анализ
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-van" type="button" role="tab">
+          Пультовая ГРП
+        </button>
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-comp" type="button" role="tab">
+          Сравнение скважин
+        </button>
+      </div>
+      <hr class="mx-2">
+      <div class="px-3 footer-note">
+        Демо-макет.<br>Данные синтетические.
+      </div>
+    </aside>
+
+    <!-- ══════════════ Контент ══════════════ -->
+    <main class="col-lg-10 py-4 px-3 px-lg-4">
+      <div class="alert alert-light alert-dismissible fade show border" role="alert" style="font-size:14px">
+        <b>👋 Это демонстрационный макет</b> платформы мониторинга добычи нефти и трещин МГРП: дашборды, 3D-сцены,
+        инженерные калькуляторы (PKN/KGD, UFD, NPV, пропант), DFIT-анализ с загрузкой CSV, пультовая ГРП в реальном
+        времени и сравнение скважин. Все данные синтетические, модели упрощённые. Кнопка «Отчёт PDF» в шапке собирает
+        сводку по расчётам для печати.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+      </div>
+      <div class="tab-content">
+
+        <!-- ════════ Вкладка 1: Добыча нефти ════════ -->
+        <div class="tab-pane fade show active" id="pane-production" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Добыча нефти</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">Регионы, способы эксплуатации, месторождения.</p>
+
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile hero h-100"><div class="card-body">
+                <div class="label">Добыча за сутки</div>
+                <div class="value">10,8 <span class="unit">млн барр.</span></div>
+                <div class="delta up">▲ +1,9 % к прошлому месяцу</div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile h-100"><div class="card-body">
+                <div class="label">Действующий фонд скважин</div>
+                <div class="value">6 240</div>
+                <div class="delta">▲ +38 за квартал</div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile h-100"><div class="card-body">
+                <div class="label">Средняя глубина скважины</div>
+                <div class="value">2 840 <span class="unit">м</span></div>
+                <div class="delta">без изменений</div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile h-100"><div class="card-body">
+                <div class="label">Обводнённость продукции</div>
+                <div class="value">84,2 <span class="unit">%</span></div>
+                <div class="delta">▲ +0,6 п.п. за год</div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Годовая добыча по регионам</h2>
+            <div class="text-body-secondary" style="font-size:13px">млн тонн, 2016–2025</div>
+            <div id="chart-regions" class="chart tall mt-2"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-regions"></table>
+            </details>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Структура добычи по способам</h2>
+                <div class="text-body-secondary" style="font-size:13px">доля способа эксплуатации скважин, %</div>
+                <div id="chart-methods" class="chart mt-2"></div>
+                <details class="mb-1">
+                  <summary>Показать данные таблицей</summary>
+                  <table class="table table-sm mt-2" id="table-methods"></table>
+                </details>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Крупнейшие месторождения</h2>
+                <div class="text-body-secondary" style="font-size:13px">среднесуточная добыча, тыс. барр./сут</div>
+                <div id="chart-fields" class="chart mt-2"></div>
+                <details class="mb-1">
+                  <summary>Показать данные таблицей</summary>
+                  <table class="table table-sm mt-2" id="table-fields"></table>
+                </details>
+              </div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════ Вкладка 2: Трещины МГРП ════════ -->
+        <div class="tab-pane fade" id="pane-frac" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Мониторинг трещин МГРП</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Скважина 4571Г, 12 стадий. Микросейсмический мониторинг, устьевые датчики давления, трассерные исследования притока.
+          </p>
+
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile h-100"><div class="card-body">
+                <div class="label">Стадий МГРП выполнено</div>
+                <div class="value">12 <span class="unit">из 12</span></div>
+                <div class="delta up">▲ все порты активированы</div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile h-100"><div class="card-body">
+                <div class="label">Средняя полудлина трещины X<sub>f</sub></div>
+                <div class="value">142 <span class="unit">м</span></div>
+                <div class="delta">по микросейсмике</div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile h-100"><div class="card-body">
+                <div class="label">Давление смыкания P<sub>c</sub></div>
+                <div class="value">42,5 <span class="unit">МПа</span></div>
+                <div class="delta">ISIP 44,8 МПа · по кривой падения</div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="card tile h-100"><div class="card-body">
+                <div class="label">Эффективность жидкости</div>
+                <div class="value">46 <span class="unit">%</span></div>
+                <div class="delta">анализ мини-ГРП (DFIT)</div>
+              </div></div>
+            </div>
+          </div>
+
+          <!-- Кривая ГРП -->
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Кривая ГРП — стадия 7</h2>
+            <div class="text-body-secondary" style="font-size:13px">
+              устьевое давление, расход и концентрация пропанта; остановка насосов и ISIP отмечены на панели давления
+            </div>
+            <div id="chart-treatment" class="chart treatment mt-2"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей (шаг 10 мин)</summary>
+              <table class="table table-sm mt-2" id="table-treatment"></table>
+            </details>
+          </div></div>
+
+          <div class="row g-3 mb-3">
+            <!-- Микросейсмика -->
+            <div class="col-12 col-xl-7">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Микросейсмический мониторинг — карта событий</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  план (вид сверху): по горизонтали — вдоль ствола, по вертикали — поперёк, м; цвет — номер стадии, размер — магнитуда
+                </div>
+                <div id="chart-microseismic" class="chart tall mt-2"></div>
+              </div></div>
+            </div>
+            <!-- Приток по стадиям -->
+            <div class="col-12 col-xl-5">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Приток по стадиям</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  доля притока по трассерным исследованиям, %<br>
+                  <span style="color: var(--status-serious)">⚠ стадия 5 — порт не отработал (выделена цветом)</span>
+                </div>
+                <div id="chart-inflow" class="chart tall mt-2"></div>
+                <details class="mb-1">
+                  <summary>Показать данные таблицей</summary>
+                  <table class="table table-sm mt-2" id="table-inflow"></table>
+                </details>
+              </div></div>
+            </div>
+          </div>
+
+          <!-- Прогноз vs факт -->
+          <div class="card"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Прогноз полудлины трещины и факт по микросейсмике</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              измените параметры дизайна ГРП — прогнозная полудлина пересчитается
+            </div>
+
+            <form class="row g-3 align-items-end mb-2" id="fracForm">
+              <div class="col-12 col-md-6 col-xl-2">
+                <label class="form-label" for="inpFormation">Объект разработки</label>
+                <select class="form-select" id="inpFormation">
+                  <option value="0.90">Баженовская свита</option>
+                  <option value="1.00" selected>Ачимовская толща</option>
+                  <option value="1.10">Тюменская свита</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="inpStages">Число стадий</label>
+                <input type="number" class="form-control" id="inpStages" value="12" min="4" max="20">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="inpRate">Расход, м³/мин</label>
+                <input type="number" class="form-control" id="inpRate" value="10" min="3" max="14" step="0.5">
+              </div>
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="inpProppant">Пропант на стадию: <b id="proppantVal">90</b> т</label>
+                <input type="range" class="form-range" id="inpProppant" value="90" min="40" max="160" step="5">
+              </div>
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="inpFluid">Жидкость ГРП</label>
+                <select class="form-select" id="inpFluid">
+                  <option value="0.85">Сшитый гель</option>
+                  <option value="1.00" selected>Линейный гель</option>
+                  <option value="1.15">Slickwater</option>
+                </select>
+              </div>
+            </form>
+            <div class="footer-note mb-2" id="fracSummary"></div>
+
+            <div id="chart-xf" class="chart"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-xf"></table>
+            </details>
+          </div></div>
+        </div>
+
+        <!-- ════════ Вкладка 3: 3D и SVG ════════ -->
+        <div class="tab-pane fade" id="pane-3d" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Объёмная и SVG-визуализация</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            3D-сцены на ECharts GL (WebGL) — вращаются мышью; спидометр и пиктограммы отрисованы SVG-рендерером ECharts.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Микросейсмика в 3D — облако событий вокруг ствола</h2>
+            <div class="text-body-secondary" style="font-size:13px">
+              оси: вдоль ствола × поперёк × глубина, м; цвет — номер стадии, размер — магнитуда; сцена вращается автоматически и мышью
+            </div>
+            <div id="chart-ms3d" class="chart mt-2" style="height:520px"></div>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-7">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Структурная поверхность кровли пласта</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  абсолютная отметка кровли, м; купольное поднятие — цель бурения
+                </div>
+                <div id="chart-surface" class="chart mt-2" style="height:480px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-5 d-flex flex-column gap-3">
+              <div class="card"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Устьевое давление — стадия в работе</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  зоны: <span style="color:var(--status-good)">●</span> норма до 45 ·
+                  <span style="color:var(--status-warning)">●</span> внимание 45–52 ·
+                  <span style="color:var(--status-serious)">●</span> риск СТОП-а &gt; 52 МПа
+                </div>
+                <div id="chart-gauge" class="chart mt-1" style="height:240px"></div>
+              </div></div>
+              <div class="card flex-grow-1"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Добыча по месторождениям</h2>
+                <div class="text-body-secondary" style="font-size:13px">тыс. барр./сут; одна капля ≈ 50 тыс. барр.</div>
+                <div id="chart-drops" class="chart mt-1" style="height:250px"></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-0">
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Добыча по регионам в 3D</h2>
+                <div class="text-body-secondary" style="font-size:13px">млн тонн, годы × регионы; высота и цвет — объём добычи</div>
+                <div id="chart-bar3d" class="chart mt-2" style="height:420px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Траектория скважины 4571Г</h2>
+                <div class="text-body-secondary" style="font-size:13px">по данным инклинометрии: вертикальный участок, набор угла, горизонтальный ствол с портами МГРП</div>
+                <div id="chart-traj" class="chart mt-2" style="height:420px"></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="card mt-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Крупнейшие месторождения мира на глобусе</h2>
+            <div class="text-body-secondary" style="font-size:13px">
+              высота и цвет столбика — добыча, млн барр./сут; глобус вращается автоматически и мышью
+            </div>
+            <div id="chart-globe" class="chart mt-2" style="height:560px"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-globe"></table>
+            </details>
+          </div></div>
+        </div>
+
+        <!-- ════════ Вкладка 4: Калькулятор ГРП ════════ -->
+        <div class="tab-pane fade" id="pane-calc" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Калькулятор дизайна ГРП</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Инженерная цепочка: геометрия трещины (PKN / KGD) → оптимальная геометрия по методике UFD → экономический оптимум числа стадий.
+            Все расчёты выполняются в браузере и пересчитываются при изменении параметров. Модели упрощённые, учебные.
+          </p>
+
+          <!-- Модуль 1: PKN / KGD -->
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">1. Геометрия трещины — модели PKN и KGD</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              ширина — из аналитического решения без утечек (Нордгрен / Гертсма—де Клерк), полудлина — из материального баланса с заданной эффективностью жидкости
+            </div>
+            <form class="row g-3 align-items-end mb-3" id="geoForm">
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="g-E">Модуль Юнга, ГПа</label>
+                <input type="number" class="form-control" id="g-E" value="25" min="5" max="80" step="1">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="g-nu">Коэфф. Пуассона</label>
+                <input type="number" class="form-control" id="g-nu" value="0.22" min="0.1" max="0.4" step="0.01">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="g-mu">Вязкость, мПа·с</label>
+                <input type="number" class="form-control" id="g-mu" value="120" min="1" max="1000" step="10">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="g-q">Расход, м³/мин</label>
+                <input type="number" class="form-control" id="g-q" value="10" min="2" max="16" step="0.5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="g-t">Время закачки, мин</label>
+                <input type="number" class="form-control" id="g-t" value="60" min="10" max="180" step="5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="g-h">Высота трещины, м</label>
+                <input type="number" class="form-control" id="g-h" value="30" min="10" max="80" step="5">
+              </div>
+              <div class="col-12 col-md-6 col-xl-4">
+                <label class="form-label" for="g-eta">Эффективность жидкости: <b id="g-eta-val">40</b> %</label>
+                <input type="range" class="form-range" id="g-eta" value="40" min="15" max="90" step="5">
+              </div>
+            </form>
+            <div class="row g-3 mb-2" id="geo-tiles"></div>
+            <div class="row g-3">
+              <div class="col-12 col-xl-6">
+                <div id="chart-geo-xf" class="chart" style="height:300px"></div>
+              </div>
+              <div class="col-12 col-xl-6">
+                <div id="chart-geo-w" class="chart" style="height:300px"></div>
+              </div>
+            </div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей (шаг 10 мин)</summary>
+              <table class="table table-sm mt-2" id="table-geo"></table>
+            </details>
+          </div></div>
+
+          <!-- Модуль 2: UFD -->
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">2. Оптимальная геометрия — Unified Fracture Design</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              при фиксированной массе пропанта существует оптимум «длина ↔ ширина»: безразмерная продуктивность J<sub>D</sub>
+              максимальна при C<sub>fD</sub> ≈ 1,6; псевдоскин — по корреляции Синко-Лея
+            </div>
+            <form class="row g-3 align-items-end mb-3" id="ufdForm">
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="u-M">Масса пропанта на стадию: <b id="u-M-val">90</b> т</label>
+                <input type="range" class="form-range" id="u-M" value="90" min="30" max="200" step="5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="u-k">Прониц. пласта, мД</label>
+                <input type="number" class="form-control" id="u-k" value="5" min="0.1" max="100" step="0.1">
+              </div>
+              <div class="col-6 col-md-3 col-xl-3">
+                <label class="form-label" for="u-kf">Пропант (прониц. упаковки)</label>
+                <select class="form-select" id="u-kf">
+                  <option value="60">Кварцевый песок — 60 Д</option>
+                  <option value="120" selected>РСП 16/30 — 120 Д</option>
+                  <option value="250">Керамика 16/20 — 250 Д</option>
+                  <option value="400">Керамика 12/18 — 400 Д</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="u-h">Толщина пласта, м</label>
+                <input type="number" class="form-control" id="u-h" value="20" min="5" max="60" step="1">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="u-xe">Сторона участка, м</label>
+                <input type="number" class="form-control" id="u-xe" value="800" min="300" max="1500" step="50">
+              </div>
+            </form>
+            <div class="row g-3 mb-2" id="ufd-tiles"></div>
+            <div id="chart-ufd" class="chart" style="height:320px"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-ufd"></table>
+            </details>
+          </div></div>
+
+          <!-- Модуль 3: NPV -->
+          <div class="card"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">3. Экономический оптимум числа стадий МГРП</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              дебит стадий складывается с интерференцией (q ~ N<sup>α</sup>), падение добычи — гиперболика Арпса;
+              NPV = дисконтированная выручка − (скважина + стадии)
+            </div>
+            <form class="row g-3 align-items-end mb-3" id="npvForm">
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="n-q0">Дебит 1-й стадии, барр/сут</label>
+                <input type="number" class="form-control" id="n-q0" value="150" min="20" max="400" step="10">
+              </div>
+              <div class="col-12 col-md-6 col-xl-3">
+                <label class="form-label" for="n-alpha">Интерференция стадий α: <b id="n-alpha-val">0.5</b></label>
+                <input type="range" class="form-range" id="n-alpha" value="0.5" min="0.3" max="0.9" step="0.05">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="n-nb">Нетбэк, $/барр</label>
+                <input type="number" class="form-control" id="n-nb" value="35" min="5" max="60" step="1">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="n-cs">Стоимость стадии, млн $</label>
+                <input type="number" class="form-control" id="n-cs" value="0.6" min="0.1" max="1.5" step="0.05">
+              </div>
+              <div class="col-6 col-md-3 col-xl-1">
+                <label class="form-label" for="n-capex">Скважина, млн $</label>
+                <input type="number" class="form-control" id="n-capex" value="3" min="1" max="10" step="0.5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-1">
+                <label class="form-label" for="n-r">Ставка, %</label>
+                <input type="number" class="form-control" id="n-r" value="15" min="5" max="30" step="1">
+              </div>
+              <div class="col-6 col-md-3 col-xl-1">
+                <label class="form-label" for="n-years">Горизонт, лет</label>
+                <input type="number" class="form-control" id="n-years" value="10" min="3" max="20" step="1">
+              </div>
+            </form>
+            <div class="row g-3 mb-2" id="npv-tiles"></div>
+            <div class="row g-3">
+              <div class="col-12 col-xl-6">
+                <div id="chart-npv" class="chart" style="height:320px"></div>
+              </div>
+              <div class="col-12 col-xl-6">
+                <div id="chart-decline" class="chart" style="height:320px"></div>
+              </div>
+            </div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-npv"></table>
+            </details>
+          </div></div>
+
+          <!-- Модуль 4: подбор пропанта -->
+          <div class="card mt-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">4. Подбор пропанта по напряжению смыкания</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              проводимость упаковки падает с эффективным напряжением σ = P<sub>c</sub> − P<sub>заб</sub>;
+              требуемая проводимость k<sub>f</sub>·w берётся из оптимума модуля 2 с коэффициентом запаса
+            </div>
+            <form class="row g-3 align-items-end mb-3" id="propForm">
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="p-pc">P<sub>c</sub> смыкания, МПа</label>
+                <input type="number" class="form-control" id="p-pc" value="42.5" min="20" max="80" step="0.5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="p-pwf">P<sub>заб</sub> при добыче, МПа</label>
+                <input type="number" class="form-control" id="p-pwf" value="18" min="5" max="40" step="0.5">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="p-sf">Коэфф. запаса</label>
+                <input type="number" class="form-control" id="p-sf" value="1.5" min="1" max="3" step="0.1">
+              </div>
+            </form>
+            <div class="row g-3 mb-2" id="prop-tiles"></div>
+            <div id="chart-prop" class="chart" style="height:320px"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-prop"></table>
+            </details>
+          </div></div>
+        </div>
+
+        <!-- ════════ Вкладка 5: DFIT-анализ ════════ -->
+        <div class="tab-pane fade" id="pane-dfit" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">DFIT-анализ (мини-ГРП)</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Интерпретация кривой падения давления после остановки закачки: G-функция с полулогарифмической производной,
+            автоопределение давления смыкания методом касательной, диагностика √t и log-log.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Данные испытания</h2>
+            <div class="text-body-secondary mb-3" style="font-size:13px">
+              загрузите CSV с двумя колонками — «время от остановки, мин» и «давление, МПа» (разделитель — запятая или точка с запятой), либо используйте демо-данные
+            </div>
+            <form class="row g-3 align-items-end mb-2" id="dfitForm">
+              <div class="col-12 col-md-5 col-xl-4">
+                <label class="form-label" for="d-file">CSV с кривой падения</label>
+                <input class="form-control" type="file" id="d-file" accept=".csv,.txt">
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="d-tp">Время закачки t<sub>p</sub>, мин</label>
+                <input type="number" class="form-control" id="d-tp" value="5" min="1" max="60" step="0.5">
+              </div>
+              <div class="col-6 col-md-4 col-xl-3">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="button" class="btn btn-outline-secondary" id="d-demo">Демо-данные</button>
+              </div>
+              <div class="col-12 col-xl-3">
+                <div class="footer-note" id="d-status"></div>
+              </div>
+            </form>
+            <div class="row g-3" id="dfit-tiles"></div>
+          </div></div>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">G-функция и производная G·dP/dG</h2>
+            <div class="text-body-secondary" style="font-size:13px">
+              при нормальных утечках производная лежит на прямой через начало координат; смыкание — точка отклонения вниз от касательной
+            </div>
+            <div id="chart-gfun" class="chart mt-2" style="height:460px"></div>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Диагностика √t</h2>
+                <div class="text-body-secondary" style="font-size:13px">до смыкания давление линейно по √t; излом — смыкание трещины</div>
+                <div id="chart-sqrt" class="chart mt-2" style="height:300px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-6">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Log-log диагностика</h2>
+                <div class="text-body-secondary" style="font-size:13px">ΔP = ISIP − P и производная t·dΔP/dt; наклон ½ — линейное течение</div>
+                <div id="chart-loglog" class="chart mt-2" style="height:300px"></div>
+              </div></div>
+            </div>
+          </div>
+          <details class="mt-3 mb-1">
+            <summary>Показать данные таблицей (каждая 20-я точка)</summary>
+            <table class="table table-sm mt-2" id="table-dfit"></table>
+          </details>
+        </div>
+
+        <!-- ════════ Вкладка 6: Пультовая ГРП ════════ -->
+        <div class="tab-pane fade" id="pane-van" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Пультовая ГРП — мониторинг в реальном времени</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Имитация станции контроля: кривая ГРП рисуется потоком, анализ Нолте—Смита классифицирует режим распространения трещины,
+            алерты предупреждают о риске СТОПа. Давление смыкания P<sub>c</sub> = 42,5 МПа (из DFIT), предел колонны — 56 МПа.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <form class="row g-3 align-items-end" id="vanForm">
+              <div class="col-12 col-md-4 col-xl-3">
+                <label class="form-label" for="v-scn">Сценарий стадии</label>
+                <select class="form-select" id="v-scn">
+                  <option value="normal" selected>Нормальная стадия</option>
+                  <option value="screenout">Экранирование (риск СТОПа)</option>
+                  <option value="height">Прорыв по высоте</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-3 col-xl-2">
+                <label class="form-label" for="v-speed">Скорость</label>
+                <select class="form-select" id="v-speed">
+                  <option value="30">×30</option>
+                  <option value="90" selected>×90</option>
+                  <option value="240">×240</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-5 col-xl-4">
+                <label class="form-label d-block">&nbsp;</label>
+                <div class="btn-group" role="group" aria-label="Управление имитацией">
+                  <button type="button" class="btn btn-primary" id="v-start">▶ Старт</button>
+                  <button type="button" class="btn btn-outline-secondary" id="v-pause">⏸ Пауза</button>
+                  <button type="button" class="btn btn-outline-secondary" id="v-reset">⟲ Сброс</button>
+                </div>
+              </div>
+              <div class="col-12 col-xl-3 text-xl-end">
+                <label class="form-label d-block">&nbsp;</label>
+                <button type="button" class="btn btn-outline-secondary" id="v-export">⭳ Выгрузить CSV</button>
+              </div>
+            </form>
+          </div></div>
+
+          <div class="row g-3 mb-3" id="van-tiles">
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Время закачки</div>
+                <div class="value" style="font-size:22px"><span id="van-t">0.0</span> <span class="unit" style="font-size:13px">мин</span></div>
+              </div></div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Давление (забой)</div>
+                <div class="value" style="font-size:22px"><span id="van-P">—</span> <span class="unit" style="font-size:13px">МПа</span></div>
+              </div></div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Расход</div>
+                <div class="value" style="font-size:22px"><span id="van-rate">—</span> <span class="unit" style="font-size:13px">м³/мин</span></div>
+              </div></div>
+            </div>
+            <div class="col-6 col-md-4 col-xl">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Закачано пропанта</div>
+                <div class="value" style="font-size:22px"><span id="van-cum">0</span> <span class="unit" style="font-size:13px">т</span></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-md-8 col-xl-3">
+              <div class="card tile h-100"><div class="card-body py-2">
+                <div class="label">Режим Нолте—Смита</div>
+                <div class="value" style="font-size:18px" id="van-mode">ожидание</div>
+                <div class="delta" id="van-slope"></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Кривая ГРП — реальное время</h2>
+            <div class="text-body-secondary" style="font-size:13px">забойное давление, расход, концентрация пропанта</div>
+            <div id="chart-van" class="chart treatment mt-2"></div>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-7">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Анализ Нолте—Смита</h2>
+                <div class="text-body-secondary" style="font-size:13px">
+                  чистое давление p<sub>net</sub> = P − P<sub>c</sub> в log-log: наклон ~0,15 — нормальный рост; наклон ≥ 1 — экранирование; падение — рост высоты/прорыв
+                </div>
+                <div id="chart-ns" class="chart mt-2" style="height:320px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-5">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Журнал событий</h2>
+                <div class="text-body-secondary mb-2" style="font-size:13px">алерты и статусы стадии, новые сверху</div>
+                <ul class="list-unstyled mb-0" id="van-log" style="max-height:300px; overflow-y:auto; font-size:13px"></ul>
+              </div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════ Вкладка 7: Сравнение скважин ════════ -->
+        <div class="tab-pane fade" id="pane-comp" role="tabpanel">
+          <h1 class="h4 fw-semibold mb-1">Сравнение скважин куста 45</h1>
+          <p class="text-body-secondary mb-3" style="font-size:14px">
+            Четыре горизонтальные скважины с МГРП: профили добычи, удельная эффективность и постадийное сравнение притока.
+          </p>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Паспорт куста</h2>
+            <div class="text-body-secondary mb-2" style="font-size:13px">цветовая метка скважины едина на всех графиках вкладки</div>
+            <div class="table-responsive">
+              <table class="table table-sm mb-1" id="table-wells"></table>
+            </div>
+          </div></div>
+
+          <div class="card mb-3"><div class="card-body">
+            <h2 class="h6 fw-semibold mb-0">Профили добычи за первый год</h2>
+            <div class="text-body-secondary" style="font-size:13px">среднесуточный дебит нефти по месяцам, барр/сут</div>
+            <div id="chart-comp-decline" class="chart tall mt-2"></div>
+            <details class="mb-1">
+              <summary>Показать данные таблицей</summary>
+              <table class="table table-sm mt-2" id="table-comp-decline"></table>
+            </details>
+          </div></div>
+
+          <div class="row g-3">
+            <div class="col-12 col-xl-5">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Удельная эффективность</h2>
+                <div class="text-body-secondary" style="font-size:13px">накопленная добыча за год на стадию и на тонну пропанта</div>
+                <div id="chart-comp-eff" class="chart mt-2" style="height:320px"></div>
+              </div></div>
+            </div>
+            <div class="col-12 col-xl-7">
+              <div class="card h-100"><div class="card-body">
+                <h2 class="h6 fw-semibold mb-0">Приток по стадиям — две скважины</h2>
+                <form class="row g-2 mt-0 mb-1" id="compForm">
+                  <div class="col-6 col-md-4">
+                    <select class="form-select form-select-sm" id="cmp-a"></select>
+                  </div>
+                  <div class="col-6 col-md-4">
+                    <select class="form-select form-select-sm" id="cmp-b"></select>
+                  </div>
+                </form>
+                <div id="chart-comp-stages" class="chart" style="height:300px"></div>
+              </div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <p class="footer-note mt-4">Данные синтетические и приведены для демонстрации макета. Построено на Apache ECharts и Bootstrap 5.</p>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+/* ══════════════════════ тема ══════════════════════ */
+const mqDark = window.matchMedia('(prefers-color-scheme: dark)');
+function setTheme(mode) {
+  document.documentElement.setAttribute('data-bs-theme', mode);
+  rerenderVisible();
+}
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-bs-theme');
+  setTheme(cur === 'dark' ? 'light' : 'dark');
+});
+mqDark.addEventListener('change', e => setTheme(e.matches ? 'dark' : 'light'));
+document.documentElement.setAttribute('data-bs-theme', mqDark.matches ? 'dark' : 'light');
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function theme() {
+  return {
+    surface:  cssVar('--surface-1'),
+    ink:      cssVar('--text-primary'),
+    ink2:     cssVar('--text-secondary'),
+    muted:    cssVar('--text-muted-viz'),
+    grid:     cssVar('--gridline'),
+    baseline: cssVar('--baseline'),
+    border:   cssVar('--border-viz'),
+    good:     cssVar('--status-good'),
+    warning:  cssVar('--status-warning'),
+    serious:  cssVar('--status-serious'),
+    rampLo:   cssVar('--ramp-lo'),
+    rampHi:   cssVar('--ramp-hi'),
+    series: [cssVar('--series-1'), cssVar('--series-2'), cssVar('--series-3'), cssVar('--series-4')],
+  };
+}
+function baseAxis(t) {
+  return {
+    axisLine:  { lineStyle: { color: t.baseline } },
+    axisTick:  { show: false },
+    axisLabel: { color: t.muted, fontSize: 12 },
+    splitLine: { lineStyle: { color: t.grid, width: 1, type: 'solid' } },
+  };
+}
+function baseTooltip(t) {
+  return {
+    backgroundColor: t.surface,
+    borderColor: t.border,
+    borderWidth: 1,
+    padding: [10, 14],
+    textStyle: { color: t.ink, fontSize: 13 },
+    extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.12); border-radius: 8px;',
+  };
+}
+function baseLegend(t) {
+  return {
+    top: 0, right: 0,
+    icon: 'circle', itemWidth: 10, itemHeight: 10, itemGap: 18,
+    textStyle: { color: t.ink2, fontSize: 13 },
+  };
+}
+
+/* детерминированный «шум», чтобы макет был стабильным */
+let seed = 42;
+function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+
+/* ══════════════════════ данные: добыча ══════════════════════ */
+const years = ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025'];
+const regions = [
+  { name: 'Западная Сибирь',  data: [316, 314, 318, 320, 302, 306, 310, 304, 299, 295] },
+  { name: 'Волго-Урал',       data: [112, 113, 115, 116, 108, 110, 112, 111, 110, 109] },
+  { name: 'Восточная Сибирь', data: [ 46,  50,  55,  59,  57,  62,  67,  71,  75,  78] },
+];
+const methodYears = ['2021','2022','2023','2024','2025'];
+const methods = [
+  { name: 'ЭЦН (насосный)',  data: [74, 75, 76, 77, 78] },
+  { name: 'ШГН (штанговый)', data: [12, 11.5, 11, 10.5, 10] },
+  { name: 'Фонтанный',       data: [8, 7.8, 7.5, 7.2, 7] },
+  { name: 'Газлифт',         data: [6, 5.7, 5.5, 5.3, 5] },
+];
+const fields = [
+  { name: 'Приобское',    value: 700 },
+  { name: 'Самотлорское', value: 605 },
+  { name: 'Ванкорское',   value: 420 },
+  { name: 'Ромашкинское', value: 300 },
+  { name: 'Фёдоровское',  value: 255 },
+  { name: 'Русское',      value: 150 },
+].sort((a, b) => a.value - b.value);
+
+/* ══════════════════════ данные: МГРП ══════════════════════ */
+const N_STAGES = 12;
+
+/* кривая ГРП: t (мин) → давление (МПа), расход (м³/мин), пропант (кг/м³) */
+function synthTreatment() {
+  const rows = [];
+  for (let t = 0; t <= 100; t += 0.5) {
+    let rate, pres, prop;
+    if (t < 5)        rate = t / 5 * 10;
+    else if (t < 75)  rate = 10 + Math.sin(t / 4) * 0.15;
+    else              rate = 0;
+
+    if (t < 5)        pres = 30 + t / 5 * 27;                       // рост до давления разрыва
+    else if (t < 8)   pres = 57 - (t - 5) / 3 * 9;                  // падение после разрыва
+    else if (t < 75)  pres = 48 + (t - 8) * 0.02 + Math.sin(t / 6) * 1.2; // распространение трещины
+    else              pres = 36.5 + 8.3 * Math.exp(-(t - 75) / 14); // остановка: ISIP ≈ 44,8, спад к смыканию
+
+    if (t < 20 || t >= 75) prop = 0;
+    else                   prop = Math.min(600, 100 + Math.floor((t - 20) / 9) * 90);
+
+    rows.push([+t.toFixed(1), +pres.toFixed(2), +rate.toFixed(2), prop]);
+  }
+  return rows;
+}
+const treatment = synthTreatment();
+
+/* микросейсмические события вокруг портов горизонтального ствола */
+const PORT_X = Array.from({ length: N_STAGES }, (_, i) => 90 + i * 110); // м от башмака
+function synthEvents() {
+  const ev = [];
+  for (let s = 0; s < N_STAGES; s++) {
+    const n = 22 + Math.floor(rnd() * 12);
+    const halfLen = 100 + rnd() * 90;      // «истинная» полудлина стадии
+    for (let k = 0; k < n; k++) {
+      const y = (rnd() * 2 - 1) * halfLen * (0.55 + rnd() * 0.45);
+      const x = PORT_X[s] + (rnd() * 2 - 1) * 38;
+      const mag = -(1 + rnd() * 2);        // магнитуда −1 … −3
+      ev.push([+x.toFixed(0), +y.toFixed(0), +mag.toFixed(2), s + 1]);
+    }
+  }
+  return ev;
+}
+const msEvents = synthEvents();
+/* фактическая полудлина по стадиям — из облака событий */
+const xfFact = Array.from({ length: N_STAGES }, (_, s) => {
+  const ys = msEvents.filter(e => e[3] === s + 1).map(e => Math.abs(e[1]));
+  ys.sort((a, b) => a - b);
+  return Math.round(ys[Math.floor(ys.length * 0.9)]); // P90 удаления событий
+});
+
+/* приток по стадиям (трассеры), %; стадия 5 — аномально низкий приток */
+const inflow = [9, 8, 11, 10, 1, 12, 9, 8, 11, 8, 6, 7];
+
+/* ══════════════════════ прогнозная модель Xf ══════════════════════ */
+function predictXf() {
+  const kForm  = +document.getElementById('inpFormation').value;
+  const nStages = Math.min(20, Math.max(4, +document.getElementById('inpStages').value || 12));
+  const rate   = +document.getElementById('inpRate').value || 10;
+  const mProp  = +document.getElementById('inpProppant').value;
+  const kFluid = +document.getElementById('inpFluid').value;
+  /* упрощённая степенная модель: Xf ~ M^0.5 · Q^0.25, калибровка на 90 т / 10 м³/мин → ~140 м */
+  const base = 140 * Math.sqrt(mProp / 90) * Math.pow(rate / 10, 0.25) * kForm * kFluid;
+  const xf = Array.from({ length: nStages }, (_, i) => Math.round(base * (0.92 + 0.16 * Math.abs(Math.sin(i * 2.3 + 1)))));
+  return { xf, nStages, mProp };
+}
+
+/* ══════════════════════ графики: добыча ══════════════════════ */
+function renderRegions(t) {
+  const el = document.getElementById('chart-regions');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: t.series,
+    grid: { left: 8, right: 150, top: 36, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: t.baseline, width: 1 } },
+      valueFormatter: v => v + ' млн т' },
+    xAxis: { type: 'category', boundaryGap: false, data: years, ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', max: 400, ...baseAxis(t), axisLine: { show: false } },
+    series: regions.map(r => ({
+      name: r.name, type: 'line', data: r.data,
+      lineStyle: { width: 2, cap: 'round', join: 'round' },
+      symbol: 'circle', symbolSize: 8, showSymbol: false,
+      itemStyle: { borderColor: t.surface, borderWidth: 2 },
+      emphasis: { focus: 'series' },
+      endLabel: { show: true, formatter: p => r.name + '  ' + p.value, color: t.ink2, fontSize: 12, distance: 8 },
+    })),
+  });
+  return c;
+}
+
+function renderMethods(t) {
+  const el = document.getElementById('chart-methods');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: t.series,
+    grid: { left: 8, right: 8, top: 56, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { opacity: 0.06 } },
+      valueFormatter: v => v + ' %' },
+    xAxis: { type: 'category', data: methodYears, ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', max: 100, ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: '{value} %' } },
+    series: methods.map((m, i) => ({
+      name: m.name, type: 'bar', stack: 'total', barMaxWidth: 24, data: m.data,
+      itemStyle: { borderColor: t.surface, borderWidth: 1,
+        borderRadius: i === methods.length - 1 ? [4, 4, 0, 0] : 0 },
+      emphasis: { focus: 'series' },
+    })),
+  });
+  return c;
+}
+
+function renderFields(t) {
+  const el = document.getElementById('chart-fields');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    grid: { left: 8, right: 56, top: 12, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => p.name + '<br><b>' + p.value + '</b> тыс. барр./сут' },
+    xAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    yAxis: { type: 'category', data: fields.map(f => f.name), ...baseAxis(t),
+      splitLine: { show: false }, axisLabel: { color: t.ink2, fontSize: 13 } },
+    series: [{
+      type: 'bar', data: fields.map(f => f.value), barMaxWidth: 20,
+      itemStyle: { color: t.series[0], borderRadius: [0, 4, 4, 0] },
+      label: { show: true, position: 'right', color: t.ink2, fontSize: 12, distance: 6 },
+    }],
+  });
+  return c;
+}
+
+/* ══════════════════════ графики: МГРП ══════════════════════ */
+function renderTreatment(t) {
+  const el = document.getElementById('chart-treatment');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  const panels = [
+    { name: 'Давление на устье', unit: 'МПа',   col: t.series[0], idx: 1, max: 60 },
+    { name: 'Расход закачки',    unit: 'м³/мин', col: t.series[1], idx: 2, max: 12 },
+    { name: 'Конц. пропанта',    unit: 'кг/м³',  col: t.series[2], idx: 3, max: 700 },
+  ];
+  c.setOption({
+    axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: t.baseline } },
+    tooltip: { ...baseTooltip(t), trigger: 'axis' },
+    grid: [
+      { left: 8, right: 32, top: 30,  height: '32%', containLabel: true },
+      { left: 8, right: 32, top: '45%', height: '19%', containLabel: true },
+      { left: 8, right: 32, top: '71%', height: '19%', containLabel: true },
+    ],
+    xAxis: panels.map((p, i) => ({
+      type: 'value', gridIndex: i, min: 0, max: 100,
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, show: i === 2, formatter: '{value} мин' },
+    })),
+    yAxis: panels.map((p, i) => ({
+      type: 'value', gridIndex: i, max: p.max,
+      name: p.name + ', ' + p.unit,
+      nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+      ...baseAxis(t), axisLine: { show: false },
+    })),
+    series: panels.map((p, i) => ({
+      name: p.name, type: 'line',
+      xAxisIndex: i, yAxisIndex: i,
+      data: treatment.map(r => [r[0], r[p.idx]]),
+      lineStyle: { width: 2, color: p.col, cap: 'round' },
+      itemStyle: { color: p.col },
+      symbol: 'none', emphasis: { disabled: true },
+      tooltip: { valueFormatter: v => v + ' ' + p.unit },
+      ...(i === 0 ? {
+        markLine: {
+          symbol: 'none', silent: true,
+          lineStyle: { color: t.baseline, width: 1, type: 'solid' },
+          label: { color: t.ink2, fontSize: 12, formatter: 'остановка насосов' },
+          data: [{ xAxis: 75 }],
+        },
+        markPoint: {
+          symbol: 'circle', symbolSize: 10,
+          itemStyle: { color: p.col, borderColor: t.surface, borderWidth: 2 },
+          label: { color: t.ink2, fontSize: 12, position: 'right', formatter: 'ISIP 44,8 МПа', distance: 8 },
+          data: [{ coord: [75.5, 44.8] }],
+        },
+      } : {}),
+    })),
+  });
+  return c;
+}
+
+function renderMicroseismic(t) {
+  const el = document.getElementById('chart-microseismic');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    grid: { left: 8, right: 16, top: 12, bottom: 76, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => p.seriesName === 'Ствол скважины' ? 'Горизонтальный ствол'
+        : 'Стадия ' + p.value[3] + '<br>X: ' + p.value[0] + ' м · Y: ' + p.value[1] + ' м<br>Магнитуда M ' + p.value[2] },
+    visualMap: {
+      type: 'continuous', dimension: 3, min: 1, max: N_STAGES,
+      orient: 'horizontal', left: 'center', bottom: 0,
+      text: ['стадия 12', 'стадия 1'],
+      textStyle: { color: t.ink2, fontSize: 12 },
+      inRange: { color: [t.rampLo, t.rampHi] },
+      seriesIndex: 0,
+    },
+    xAxis: { type: 'value', name: 'вдоль ствола, м', nameLocation: 'middle', nameGap: 28,
+      nameTextStyle: { color: t.muted, fontSize: 12 },
+      min: 0, max: 1400, ...baseAxis(t) },
+    yAxis: { type: 'value',
+      min: -260, max: 260, ...baseAxis(t), axisLine: { show: false } },
+    series: [
+      {
+        name: 'События', type: 'scatter', data: msEvents,
+        symbolSize: v => 20 + v[2] * 5,   /* M −1 → 15px, M −3 → 5px */
+        itemStyle: { borderColor: t.surface, borderWidth: 1, opacity: 0.9 },
+      },
+      {
+        name: 'Ствол скважины', type: 'line',
+        data: [[0, 0], [1400, 0]],
+        lineStyle: { color: t.ink2, width: 2 },
+        symbol: 'none', silent: false, z: 5,
+        markPoint: {
+          symbol: 'rect', symbolSize: [8, 8], silent: true,
+          itemStyle: { color: t.ink2, borderColor: t.surface, borderWidth: 1 },
+          data: PORT_X.map(x => ({ coord: [x, 0] })),
+        },
+      },
+    ],
+  });
+  return c;
+}
+
+function renderInflow(t) {
+  const el = document.getElementById('chart-inflow');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    grid: { left: 8, right: 8, top: 36, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => 'Стадия ' + (p.dataIndex + 1) + '<br><b>' + p.value + ' %</b> притока' },
+    xAxis: { type: 'category', data: inflow.map((_, i) => 'Ст. ' + (i + 1)),
+      ...baseAxis(t), splitLine: { show: false }, axisLabel: { color: t.muted, fontSize: 11, interval: 0 } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: '{value} %' } },
+    series: [{
+      type: 'bar', barMaxWidth: 22,
+      /* стадия 5 — статусный цвет «порт не отработал» */
+      data: inflow.map((v, i) => ({
+        value: v,
+        itemStyle: { color: i === 4 ? t.serious : t.series[0], borderRadius: [4, 4, 0, 0] },
+      })),
+      label: { show: false },
+      markPoint: {
+        symbol: 'circle', symbolSize: 1, silent: true,
+        label: { show: true, formatter: '⚠', color: t.serious, fontSize: 14, position: 'top' },
+        data: [{ coord: [4, inflow[4]] }],
+      },
+    }],
+  });
+  return c;
+}
+
+function renderXf(t) {
+  const el = document.getElementById('chart-xf');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  const { xf, nStages, mProp } = predictXf();
+  const nCats = Math.max(nStages, N_STAGES);
+  const cats = Array.from({ length: nCats }, (_, i) => 'Ст. ' + (i + 1));
+  const avg = Math.round(xf.reduce((a, b) => a + b, 0) / xf.length);
+  document.getElementById('proppantVal').textContent = mProp;
+  document.getElementById('fracSummary').textContent =
+    'Прогнозная средняя полудлина: ' + avg + ' м · стадий: ' + nStages +
+    ' · суммарный пропант: ' + (nStages * mProp) + ' т';
+  c.setOption({
+    color: [t.series[1], t.series[0]],
+    grid: { left: 8, right: 8, top: 40, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { opacity: 0.06 } },
+      valueFormatter: v => (v == null ? '—' : v + ' м') },
+    xAxis: { type: 'category', data: cats, ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 11, interval: 0 } },
+    yAxis: { type: 'value', name: 'Xf, м', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false } },
+    series: [
+      { name: 'Прогноз (модель)', type: 'bar', barMaxWidth: 14, barGap: '25%',
+        data: cats.map((_, i) => i < nStages ? xf[i] : null),
+        itemStyle: { borderRadius: [3, 3, 0, 0] } },
+      { name: 'Факт (микросейсмика)', type: 'bar', barMaxWidth: 14,
+        data: cats.map((_, i) => i < N_STAGES ? xfFact[i] : null),
+        itemStyle: { borderRadius: [3, 3, 0, 0] } },
+    ],
+  });
+  fillTable('table-xf', ['Стадия', 'Прогноз, м', 'Факт, м'],
+    cats.map((cat, i) => [cat, i < nStages ? xf[i] : '—', i < N_STAGES ? xfFact[i] : '—']));
+  return c;
+}
+
+/* ══════════════════════ графики: 3D и SVG ══════════════════════ */
+/* глубина событий: детерминированно от координат, пласт на а.о. −2840 м */
+const ms3d = msEvents.map(e =>
+  [e[0], e[1], -2840 + Math.sin(e[0] * 12.9898 + e[1] * 78.233) * 42, e[3], e[2]]);
+
+function base3dAxis(t, name) {
+  return {
+    name, nameTextStyle: { color: t.ink2, fontSize: 12 },
+    axisLine: { lineStyle: { color: t.baseline } },
+    axisLabel: { color: t.muted, fontSize: 10 },
+    splitLine: { lineStyle: { color: t.grid, opacity: 0.6 } },
+    axisPointer: { show: false },
+  };
+}
+
+function renderMs3d(t) {
+  const el = document.getElementById('chart-ms3d');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => p.seriesType === 'scatter3D'
+        ? 'Стадия ' + p.value[3] + '<br>X: ' + p.value[0] + ' м · Y: ' + p.value[1] +
+          ' м<br>Глубина: ' + Math.round(p.value[2]) + ' м · M ' + p.value[4]
+        : 'Горизонтальный ствол, а.о. −2840 м' },
+    visualMap: {
+      type: 'continuous', dimension: 3, min: 1, max: N_STAGES,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['стадия 12', 'стадия 1'],
+      textStyle: { color: t.ink2, fontSize: 12 },
+      inRange: { color: [t.rampLo, t.rampHi] },
+      seriesIndex: 0,
+    },
+    grid3D: {
+      boxWidth: 180, boxDepth: 90, boxHeight: 60,
+      environment: t.surface,
+      light: { main: { intensity: 1.1, shadow: false }, ambient: { intensity: 0.5 } },
+      viewControl: { autoRotate: true, autoRotateSpeed: 6, distance: 230, alpha: 18, beta: 30 },
+    },
+    xAxis3D: { type: 'value', min: 0, max: 1400, ...base3dAxis(t, 'вдоль ствола, м') },
+    yAxis3D: { type: 'value', min: -300, max: 300, ...base3dAxis(t, 'поперёк, м') },
+    zAxis3D: { type: 'value', min: -2950, max: -2730, ...base3dAxis(t, 'глубина, м') },
+    series: [
+      {
+        type: 'scatter3D', data: ms3d,
+        symbolSize: v => 16 + v[4] * 4,   /* M −1 → 12px, M −3 → 4px */
+        itemStyle: { opacity: 0.85 },
+        emphasis: { itemStyle: { opacity: 1 } },
+      },
+      {
+        type: 'line3D',
+        data: Array.from({ length: 57 }, (_, i) => [i * 25, 0, -2840]),
+        lineStyle: { width: 5, color: t.ink2 },
+      },
+    ],
+  });
+  return c;
+}
+
+function renderSurface(t) {
+  const el = document.getElementById('chart-surface');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => 'X: ' + Math.round(p.value[0]) + ' м · Y: ' + Math.round(p.value[1]) +
+        ' м<br>Кровля: <b>' + Math.round(p.value[2]) + ' м</b>' },
+    visualMap: {
+      type: 'continuous', dimension: 2, min: -2830, max: -2660,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['выше', 'глубже'],
+      textStyle: { color: t.ink2, fontSize: 12 },
+      /* глубже — темнее, свод поднятия — светлее */
+      inRange: { color: ['#0d366b', '#256abf', '#5598e7', '#9ec5f4', '#cde2fb'] },
+    },
+    grid3D: {
+      boxWidth: 170, boxDepth: 130, boxHeight: 55,
+      environment: t.surface,
+      light: { main: { intensity: 1.15, shadow: false }, ambient: { intensity: 0.45 } },
+      viewControl: { distance: 220, alpha: 28, beta: 15 },
+    },
+    xAxis3D: { type: 'value', min: 0, max: 1400, ...base3dAxis(t, 'X, м') },
+    yAxis3D: { type: 'value', min: -600, max: 600, ...base3dAxis(t, 'Y, м') },
+    zAxis3D: { type: 'value', min: -2860, max: -2650, ...base3dAxis(t, 'а.о., м') },
+    series: [{
+      type: 'surface',
+      wireframe: { show: true, lineStyle: { color: 'rgba(11,11,11,0.08)', width: 0.5 } },
+      equation: {
+        x: { step: 25, min: 0, max: 1400 },
+        y: { step: 25, min: -600, max: 600 },
+        z: (x, y) => -2750
+          + 72 * Math.exp(-((x - 750) ** 2 + (y * 1.5) ** 2) / (2 * 380 ** 2))  /* купол */
+          - x * 0.035                                                            /* региональный наклон */
+          + 6 * Math.sin(x / 90) * Math.cos(y / 70),                             /* мелкая складчатость */
+      },
+    }],
+  });
+  return c;
+}
+
+function renderGauge(t) {
+  const el = document.getElementById('chart-gauge');
+  echarts.dispose(el);
+  const c = echarts.init(el, null, { renderer: 'svg' });
+  c.setOption({
+    series: [{
+      type: 'gauge', min: 0, max: 60, splitNumber: 6,
+      startAngle: 210, endAngle: -30,
+      radius: '95%', center: ['50%', '60%'],
+      axisLine: { lineStyle: { width: 12,
+        color: [[45 / 60, t.good], [52 / 60, t.warning], [1, t.serious]] } },
+      axisTick: { distance: -12, length: 4, lineStyle: { color: t.surface, width: 1 } },
+      splitLine: { distance: -12, length: 12, lineStyle: { color: t.surface, width: 2 } },
+      axisLabel: { color: t.muted, distance: 18, fontSize: 11 },
+      pointer: { length: '58%', width: 4, itemStyle: { color: t.ink2 } },
+      anchor: { show: true, size: 10, itemStyle: { color: t.ink2, borderColor: t.surface, borderWidth: 2 } },
+      detail: { formatter: '{value} МПа', color: t.ink, fontSize: 22, fontWeight: 600, offsetCenter: [0, '66%'] },
+      data: [{ value: 48.6 }],
+    }],
+  });
+  return c;
+}
+
+function renderDrops(t) {
+  const el = document.getElementById('chart-drops');
+  echarts.dispose(el);
+  const c = echarts.init(el, null, { renderer: 'svg' });
+  const drop = 'path://M24 4 C24 4 10 24 10 33 a14 14 0 0 0 28 0 C38 24 24 4 24 4 Z';
+  c.setOption({
+    grid: { left: 8, right: 52, top: 8, bottom: 0, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => p.name + '<br><b>' + p.value + '</b> тыс. барр./сут' },
+    xAxis: { type: 'value', max: 700, show: false },
+    yAxis: { type: 'category', data: fields.map(f => f.name),
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { color: t.ink2, fontSize: 13 } },
+    series: [
+      { /* фон: полный ряд бледных капель */
+        type: 'pictorialBar', symbol: drop,
+        symbolRepeat: 'fixed', symbolSize: [13, 16], symbolMargin: 2,
+        symbolBoundingData: 700,
+        data: fields.map(() => 700),
+        itemStyle: { color: t.grid },
+        silent: true, animation: false, z: 1,
+      },
+      { /* значение: закрашенные капли */
+        type: 'pictorialBar', symbol: drop,
+        symbolRepeat: 'fixed', symbolClip: true, symbolSize: [13, 16], symbolMargin: 2,
+        symbolBoundingData: 700,
+        data: fields.map(f => f.value),
+        itemStyle: { color: t.series[0] },
+        label: { show: true, position: 'right', offset: [8, 0], color: t.ink2, fontSize: 12 },
+        z: 2,
+      },
+    ],
+  });
+  return c;
+}
+
+/* ── 3D-бары: добыча по регионам × годам ── */
+function renderBar3d(t) {
+  const el = document.getElementById('chart-bar3d');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  const data = [];
+  regions.forEach((r, ri) => r.data.forEach((v, yi) => data.push([yi, ri, v])));
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => regions[p.value[1]].name + ', ' + years[p.value[0]] +
+        '<br><b>' + p.value[2] + '</b> млн т' },
+    visualMap: {
+      type: 'continuous', dimension: 2, min: 0, max: 330,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['млн т', ''], textStyle: { color: t.ink2, fontSize: 12 },
+      inRange: { color: ['#9ec5f4', '#5598e7', '#256abf', '#0d366b'] },
+    },
+    grid3D: {
+      boxWidth: 150, boxDepth: 60, boxHeight: 70,
+      environment: t.surface,
+      light: { main: { intensity: 1.1, shadow: false }, ambient: { intensity: 0.5 } },
+      viewControl: { distance: 220, alpha: 20, beta: 35 },
+    },
+    xAxis3D: { type: 'category', data: years, ...base3dAxis(t, '') },
+    yAxis3D: { type: 'category', data: regions.map(r => r.name), ...base3dAxis(t, ''),
+      axisLabel: { color: t.muted, fontSize: 9 } },
+    zAxis3D: { type: 'value', max: 340, ...base3dAxis(t, 'млн т') },
+    series: [{
+      type: 'bar3D', data, barSize: 5, bevelSize: 0.3, bevelSmoothness: 4,
+      shading: 'lambert',
+      emphasis: { itemStyle: { color: t.series[2] } },
+    }],
+  });
+  return c;
+}
+
+/* ── 3D-траектория ствола по инклинометрии ── */
+function buildTrajectory() {
+  const pts = [];
+  for (let z = 0; z >= -2400; z -= 60) pts.push([0, 0, z]);              // вертикальный участок
+  const R = 440;
+  for (let a = 5; a <= 90; a += 5) {                                     // набор угла радиусом 440 м
+    const rad = a * Math.PI / 180;
+    pts.push([R * (1 - Math.cos(rad)), 0, -2400 - R * Math.sin(rad)]);
+  }
+  for (let x = R + 50; x <= R + 1400; x += 50) pts.push([x, 0, -2840]);  // горизонтальный ствол
+  return pts;
+}
+function renderTraj(t) {
+  const el = document.getElementById('chart-traj');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  const traj = buildTrajectory();
+  const ports = PORT_X.map(x => [440 + x, 0, -2840]);
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => p.seriesName === 'Порты МГРП'
+        ? 'Порт МГРП<br>смещение ' + Math.round(p.value[0]) + ' м · глубина ' + p.value[2] + ' м'
+        : 'Ствол скважины<br>смещение ' + Math.round(p.value[0]) + ' м · глубина ' + Math.round(p.value[2]) + ' м' },
+    grid3D: {
+      boxWidth: 110, boxDepth: 50, boxHeight: 130,
+      environment: t.surface,
+      light: { main: { intensity: 1.1, shadow: false }, ambient: { intensity: 0.5 } },
+      viewControl: { distance: 250, alpha: 10, beta: 40 },
+    },
+    xAxis3D: { type: 'value', min: -100, max: 2000, ...base3dAxis(t, 'смещение, м') },
+    yAxis3D: { type: 'value', min: -400, max: 400, ...base3dAxis(t, '') },
+    zAxis3D: { type: 'value', min: -3000, max: 0, ...base3dAxis(t, 'глубина, м') },
+    series: [
+      { name: 'Ствол', type: 'line3D', data: traj,
+        lineStyle: { width: 6, color: t.series[0] } },
+      { name: 'Порты МГРП', type: 'scatter3D', data: ports,
+        symbolSize: 9, itemStyle: { color: t.series[2] },
+        emphasis: { itemStyle: { color: t.serious } } },
+      { name: 'Устье', type: 'scatter3D', data: [[0, 0, 0]],
+        symbolSize: 14, itemStyle: { color: t.series[1] },
+        label: { show: true, formatter: 'устье', distance: 6,
+          textStyle: { color: t.ink2, fontSize: 12, backgroundColor: 'transparent' } } },
+    ],
+  });
+  return c;
+}
+
+/* ── глобус: крупнейшие месторождения мира ── */
+const worldFields = [
+  { name: 'Гавар (С. Аравия)',       coord: [49.6, 25.4],   v: 3.8 },
+  { name: 'Пермский бассейн (США)',  coord: [-102.4, 31.8], v: 5.8 },
+  { name: 'Большой Бурган (Кувейт)', coord: [47.9, 28.9],   v: 1.7 },
+  { name: 'Румайла (Ирак)',          coord: [47.3, 30.2],   v: 1.4 },
+  { name: 'Сафания (С. Аравия)',     coord: [48.8, 28.0],   v: 1.2 },
+  { name: 'Тенгиз (Казахстан)',      coord: [53.4, 46.2],   v: 0.7 },
+  { name: 'Кашаган (Казахстан)',     coord: [51.6, 46.6],   v: 0.4 },
+  { name: 'Приобское (Россия)',      coord: [70.2, 61.3],   v: 0.7 },
+  { name: 'Самотлорское (Россия)',   coord: [76.7, 60.9],   v: 0.6 },
+  { name: 'Ванкорское (Россия)',     coord: [83.6, 67.8],   v: 0.42 },
+  { name: 'Дацин (Китай)',           coord: [125.0, 46.6],  v: 0.6 },
+  { name: 'Тупи (Бразилия)',         coord: [-42.9, -25.4], v: 0.9 },
+  { name: 'Кантарел (Мексика)',      coord: [-92.2, 19.4],  v: 0.16 },
+];
+let globeTexChart = null;
+function renderGlobe(t) {
+  const el = document.getElementById('chart-globe');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  /* текстура глобуса — отдельный echarts-инстанс с картой мира в равнопромежуточной проекции */
+  if (globeTexChart) { globeTexChart.dispose(); }
+  const texCanvas = document.createElement('canvas');
+  globeTexChart = echarts.init(texCanvas, null, { width: 2048, height: 1024 });
+  globeTexChart.setOption({
+    backgroundColor: t.surface,
+    geo: {
+      map: 'world', left: 0, top: 0, right: 0, bottom: 0,
+      boundingCoords: [[-180, 90], [180, -90]],
+      silent: true, roam: false,
+      itemStyle: { areaColor: t.grid, borderColor: t.baseline, borderWidth: 0.7 },
+    },
+  });
+  c.setOption({
+    tooltip: { ...baseTooltip(t),
+      formatter: p => p.data && p.data.name
+        ? p.data.name + '<br><b>' + p.data.value[3] + '</b> млн барр./сут' : '' },
+    visualMap: {
+      type: 'continuous', dimension: 3, min: 0, max: 6,
+      orient: 'vertical', right: 8, top: 'center',
+      text: ['млн барр./сут', ''], textStyle: { color: t.ink2, fontSize: 12 },
+      /* на тёмном глобусе шкала светлеет к максимуму, на светлом — темнеет */
+      inRange: { color: document.documentElement.getAttribute('data-bs-theme') === 'dark'
+        ? ['#256abf', '#5598e7', '#9ec5f4', '#cde2fb']
+        : ['#9ec5f4', '#5598e7', '#256abf', '#0d366b'] },
+      seriesIndex: 0,
+    },
+    globe: {
+      baseTexture: globeTexChart,
+      shading: 'color',
+      environment: t.surface,
+      atmosphere: { show: true, color: t.series[0], glowPower: 4, innerGlowPower: 1 },
+      light: { main: { intensity: 1, shadow: false }, ambient: { intensity: 1 } },
+      viewControl: { autoRotate: true, autoRotateSpeed: 6, distance: 180, targetCoord: [60, 40] },
+    },
+    series: [{
+      type: 'bar3D', coordinateSystem: 'globe',
+      /* высота столбика нормирована вручную: value[2] = добыча × 12 (ед. радиуса глобуса) */
+      data: worldFields.map(f => ({ name: f.name, value: [...f.coord, f.v * 12, f.v] })),
+      barSize: 1.2, minHeight: 2,
+      shading: 'color',
+    }],
+  });
+  return c;
+}
+
+/* ══════════════════════ калькулятор ГРП ══════════════════════ */
+const num = id => +document.getElementById(id).value;
+function tile(label, value, unit, note) {
+  return '<div class="col-6 col-md-3"><div class="card tile h-100"><div class="card-body py-2">' +
+    '<div class="label">' + label + '</div>' +
+    '<div class="value" style="font-size:22px">' + value +
+    (unit ? ' <span class="unit" style="font-size:13px">' + unit + '</span>' : '') + '</div>' +
+    (note ? '<div class="delta">' + note + '</div>' : '') +
+    '</div></div></div>';
+}
+
+/* ── Модуль 1: PKN / KGD ── */
+/* ширина — решения без утечек (Нордгрен; Гертсма—де Клерк), Xf — материальный баланс с η */
+function calcGeometry() {
+  const Ep = num('g-E') * 1e9 / (1 - num('g-nu') ** 2);   // модуль плоской деформации, Па
+  const mu = num('g-mu') * 1e-3;                          // Па·с
+  const q  = num('g-q') / 60;                             // м³/с (на оба крыла)
+  const T  = num('g-t') * 60;                             // с
+  const h  = num('g-h');
+  const eta = num('g-eta') / 100;
+  document.getElementById('g-eta-val').textContent = num('g-eta');
+  const rows = [];
+  const n = 60;
+  for (let i = 1; i <= n; i++) {
+    const t = T * i / n;
+    const w0p = 2.5  * Math.pow(mu * q * q / (Ep * h), 0.2)       * Math.pow(t, 0.2);
+    const w0k = 1.87 * Math.pow(mu * q ** 3 / (Ep * h ** 3), 1/6) * Math.pow(t, 1/3);
+    const Vf  = eta * q * t;                              // объём трещины (оба крыла)
+    rows.push({
+      tmin: t / 60,
+      xfp: Vf / (2 * h * 0.63 * w0p),   // PKN: эллиптическое сечение
+      xfk: Vf / (2 * h * 0.785 * w0k),  // KGD: прямоугольное по высоте
+      wp: w0p * 1000, wk: w0k * 1000,   // мм
+    });
+  }
+  return rows;
+}
+function renderGeo(t) {
+  const rows = calcGeometry();
+  const last = rows[rows.length - 1];
+  document.getElementById('geo-tiles').innerHTML =
+    tile('X<sub>f</sub> PKN', Math.round(last.xfp), 'м') +
+    tile('Ширина PKN', last.wp.toFixed(1), 'мм', 'у ствола') +
+    tile('X<sub>f</sub> KGD', Math.round(last.xfk), 'м') +
+    tile('Ширина KGD', last.wk.toFixed(1), 'мм', 'у ствола');
+  const mk = (elId, title, s1, s2, unit) => {
+    const el = document.getElementById(elId);
+    echarts.dispose(el);
+    const c = echarts.init(el);
+    c.setOption({
+      color: [t.series[0], t.series[1]],
+      title: { text: title, left: 0, top: 0,
+        textStyle: { color: t.ink2, fontSize: 13, fontWeight: 500 } },
+      grid: { left: 8, right: 40, top: 56, bottom: 8, containLabel: true },
+      legend: { ...baseLegend(t) },
+      tooltip: { ...baseTooltip(t), trigger: 'axis',
+        axisPointer: { type: 'line', lineStyle: { color: t.baseline, width: 1 } },
+        valueFormatter: v => v.toFixed(1) + ' ' + unit },
+      xAxis: { type: 'value', max: Math.ceil(num('g-t') / 10) * 10,
+        name: 'мин', nameTextStyle: { color: t.muted },
+        ...baseAxis(t), splitLine: { show: false } },
+      yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+      series: [
+        { name: 'PKN', type: 'line', showSymbol: false, lineStyle: { width: 2 },
+          data: rows.map(r => [r.tmin, +r[s1].toFixed(2)]) },
+        { name: 'KGD', type: 'line', showSymbol: false, lineStyle: { width: 2 },
+          data: rows.map(r => [r.tmin, +r[s2].toFixed(2)]) },
+      ],
+    });
+    return c;
+  };
+  const c1 = mk('chart-geo-xf', 'Рост полудлины трещины, м', 'xfp', 'xfk', 'м');
+  const c2 = mk('chart-geo-w', 'Рост ширины у ствола, мм', 'wp', 'wk', 'мм');
+  fillTable('table-geo', ['t, мин', 'Xf PKN, м', 'Xf KGD, м', 'w PKN, мм', 'w KGD, мм'],
+    rows.filter(r => Math.round(r.tmin) % 10 === 0 && r.tmin % 1 < 0.5)
+        .map(r => [Math.round(r.tmin), Math.round(r.xfp), Math.round(r.xfk),
+                   r.wp.toFixed(1), r.wk.toFixed(1)]));
+  return [c1, c2];
+}
+
+/* ── Модуль 2: UFD ── */
+function fCinco(cfd) {  /* псевдоскин-функция Синко-Лея: sf + ln(xf/rw) = f(CfD) */
+  const u = Math.log(cfd);
+  return (1.65 - 0.328 * u + 0.116 * u * u) / (1 + 0.18 * u + 0.064 * u * u + 0.005 * u ** 3);
+}
+const JD_MAX = 6 / Math.PI / Math.PI;  /* предел JD при псевдостационарном притоке */
+function calcUFD() {
+  const M = num('u-M');
+  document.getElementById('u-M-val').textContent = M;
+  const Vf = M * 1000 / (2650 * 0.65);            // объём упаковки пропанта, м³
+  const kf = num('u-kf') * 9.869e-13;             // Д → м²
+  const k  = num('u-k') * 9.869e-16;              // мД → м²
+  const h  = num('u-h'), xe = num('u-xe'), rw = 0.1;
+  const re = xe / Math.sqrt(Math.PI);
+  const lnTerm = Math.log(0.472 * re / rw);
+  const JD0 = 1 / lnTerm;
+  const Np = 2 * kf * Vf / (k * xe * xe * h);
+  const pts = [];
+  for (let i = 0; i <= 80; i++) {
+    const cfd = Math.pow(10, -1 + i * 4 / 80);    // 0.1 … 1000
+    let xf = Math.sqrt(kf * Vf / (2 * h * cfd * k)), w, cfdEff = cfd, capped = false;
+    if (xf > 0.5 * xe) {                          // трещина упёрлась в границу участка
+      xf = 0.5 * xe; capped = true;
+      w = Vf / (2 * xf * h);
+      cfdEff = kf * w / (k * xf);
+    } else {
+      w = cfd * k * xf / kf;
+    }
+    const sf = fCinco(cfdEff) - Math.log(xf / rw);
+    const den = lnTerm + sf;
+    const JD = den > 1 / JD_MAX ? 1 / den : JD_MAX;
+    pts.push({ cfd, xf, w: w * 1000, JD: Math.min(JD, JD_MAX), capped });
+  }
+  const best = pts.reduce((a, b) => (b.JD > a.JD ? b : a));
+  return { pts, best, Np, JD0 };
+}
+function renderUFD(t) {
+  const { pts, best, Np, JD0 } = calcUFD();
+  document.getElementById('ufd-tiles').innerHTML =
+    tile('Число пропанта N<sub>p</sub>', Np.toFixed(2), '') +
+    tile('Оптимум C<sub>fD</sub>', best.cfd.toFixed(1), '', best.capped ? 'ограничено участком' : '') +
+    tile('Оптимальные X<sub>f</sub> / w', Math.round(best.xf) + ' м / ' + best.w.toFixed(1) + ' мм', '') +
+    tile('J<sub>D</sub> и кратность', best.JD.toFixed(3), '', '×' + (best.JD / JD0).toFixed(1) + ' к скважине без ГРП');
+  const el = document.getElementById('chart-ufd');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    grid: { left: 8, right: 48, top: 32, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      formatter: ps => {
+        const p = pts[ps[0].dataIndex];
+        return 'C<sub>fD</sub> = ' + p.cfd.toFixed(2) + '<br>J<sub>D</sub> = <b>' + p.JD.toFixed(3) +
+          '</b><br>X<sub>f</sub> = ' + Math.round(p.xf) + ' м · w = ' + p.w.toFixed(1) + ' мм';
+      } },
+    xAxis: { type: 'log', min: 0.1, max: 1000,
+      name: 'C_fD', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', name: 'J_D', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: v => v.toFixed(1) } },
+    series: [{
+      type: 'line', showSymbol: false,
+      lineStyle: { width: 2, color: t.series[0] },
+      itemStyle: { color: t.series[0] },
+      data: pts.map(p => [p.cfd, +p.JD.toFixed(4)]),
+      markPoint: {
+        symbol: 'circle', symbolSize: 10,
+        itemStyle: { color: t.series[0], borderColor: t.surface, borderWidth: 2 },
+        label: { color: t.ink2, fontSize: 12, distance: 8,
+          position: best.cfd < 1 ? 'right' : 'top',
+          formatter: 'оптимум: CfD ' + best.cfd.toFixed(1) + ', JD ' + best.JD.toFixed(2) },
+        data: [{ coord: [best.cfd, +best.JD.toFixed(4)] }],
+      },
+    }],
+  });
+  fillTable('table-ufd', ['C_fD', 'X_f, м', 'w, мм', 'J_D'],
+    pts.filter((_, i) => i % 10 === 0)
+       .map(p => [p.cfd.toFixed(2), Math.round(p.xf), p.w.toFixed(2), p.JD.toFixed(3)]));
+  return [c];
+}
+
+/* ── Модуль 3: NPV по числу стадий ── */
+function calcNPV() {
+  const q0 = num('n-q0'), alpha = num('n-alpha'), nb = num('n-nb');
+  const cs = num('n-cs'), capex = num('n-capex'), r = num('n-r') / 100, years = num('n-years');
+  document.getElementById('n-alpha-val').textContent = alpha.toFixed(2);
+  const Di = 0.8;                                  // темп падения, 1/год (гиперболика, b = 1)
+  const months = years * 12;
+  const res = [];
+  for (let N = 4; N <= 24; N++) {
+    const qi = q0 * Math.pow(N, alpha);            // барр/сут с интерференцией стадий
+    let pv = 0, cum = 0;
+    for (let m = 0; m < months; m++) {
+      const ty = (m + 0.5) / 12;
+      const qm = qi / (1 + Di * ty);
+      cum += qm * 30.44;
+      pv += qm * 30.44 * nb * Math.exp(-r * ty);
+    }
+    res.push({ N, npv: pv / 1e6 - capex - N * cs, cum: cum / 1e3, qi });
+  }
+  const best = res.reduce((a, b) => (b.npv > a.npv ? b : a));
+  return { res, best, Di, years };
+}
+function renderNPV(t) {
+  const { res, best, Di, years } = calcNPV();
+  const payback = best.npv > 0 ? (num('n-capex') + best.N * num('n-cs')) /
+    (best.npv + num('n-capex') + best.N * num('n-cs')) * years : null;
+  document.getElementById('npv-tiles').innerHTML =
+    tile('Оптимум стадий', best.N, '') +
+    tile('NPV при оптимуме', best.npv.toFixed(1), 'млн $') +
+    tile('Добыча за горизонт', Math.round(best.cum), 'тыс. барр.') +
+    tile('Стартовый дебит', Math.round(best.qi), 'барр/сут');
+  /* NPV vs N */
+  const el1 = document.getElementById('chart-npv');
+  echarts.dispose(el1);
+  const c1 = echarts.init(el1);
+  c1.setOption({
+    title: { text: 'NPV скважины от числа стадий, млн $', left: 0, top: 0,
+      textStyle: { color: t.ink2, fontSize: 13, fontWeight: 500 } },
+    grid: { left: 8, right: 8, top: 48, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => res[p.dataIndex].N + ' стадий<br>NPV = <b>' +
+        res[p.dataIndex].npv.toFixed(2) + '</b> млн $' },
+    xAxis: { type: 'category', data: res.map(x => x.N),
+      name: 'стадий', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 11 } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    series: [{
+      type: 'bar', barMaxWidth: 18,
+      data: res.map(x => +x.npv.toFixed(2)),
+      itemStyle: { color: t.series[0], borderRadius: [3, 3, 0, 0] },
+      markPoint: {
+        symbol: 'circle', symbolSize: 1, silent: true,
+        label: { show: true, formatter: '▼ оптимум', color: t.ink2, fontSize: 12, position: 'top' },
+        data: [{ coord: [best.N - 4, best.npv] }],
+      },
+    }],
+  });
+  /* профили добычи */
+  const el2 = document.getElementById('chart-decline');
+  echarts.dispose(el2);
+  const c2 = echarts.init(el2);
+  const picks = [...new Set([Math.max(4, best.N - 6), best.N, Math.min(24, best.N + 8)])];
+  c2.setOption({
+    color: [t.series[1], t.series[0], t.series[3]].slice(0, picks.length),
+    title: { text: 'Профиль добычи, барр/сут', left: 0, top: 0,
+      textStyle: { color: t.ink2, fontSize: 13, fontWeight: 500 } },
+    grid: { left: 8, right: 36, top: 56, bottom: 8, containLabel: true },
+    legend: { ...baseLegend(t) },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: t.baseline, width: 1 } },
+      valueFormatter: v => Math.round(v) + ' барр/сут' },
+    xAxis: { type: 'value', max: years, name: 'лет', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    series: picks.map(N => {
+      const qi = num('n-q0') * Math.pow(N, num('n-alpha'));
+      return {
+        name: N === best.N ? N + ' стадий (оптимум)' : N + ' стадий',
+        type: 'line', showSymbol: false, lineStyle: { width: 2 },
+        data: Array.from({ length: 121 }, (_, m) => {
+          const ty = m * years / 120;
+          return [+ty.toFixed(2), +(qi / (1 + Di * ty)).toFixed(1)];
+        }),
+      };
+    }),
+  });
+  fillTable('table-npv', ['Стадий', 'Стартовый дебит, барр/сут', 'Добыча за горизонт, тыс. барр.', 'NPV, млн $'],
+    res.map(x => [x.N, Math.round(x.qi), Math.round(x.cum), x.npv.toFixed(2)]));
+  return [c1, c2];
+}
+
+/* ── Модуль 4: подбор пропанта ── */
+/* кривые проводимости упаковки C(σ) = C0·exp(−σ/σ0), мД·м (обобщённые лабораторные) */
+const PROPPANTS = [
+  { name: 'Кварцевый песок 20/40', C0: 2800, s0: 11 },
+  { name: 'РСП 16/30',             C0: 3600, s0: 15 },
+  { name: 'Керамика 16/20',        C0: 5200, s0: 21 },
+  { name: 'Керамика 12/18',        C0: 6800, s0: 25 },
+];
+function renderProppant(t) {
+  const sigma = Math.max(1, num('p-pc') - num('p-pwf'));
+  const sf = num('p-sf');
+  const ufd = calcUFD();
+  /* требуемая проводимость трещины: C_fD·k·x_f оптимума, мД·м */
+  const reqBase = ufd.best.cfd * num('u-k') * ufd.best.xf;
+  const req = reqBase * sf;
+  const rows = PROPPANTS.map(p => {
+    const cond = p.C0 * Math.exp(-sigma / p.s0);
+    const margin = cond / req;
+    const status = margin >= 1 ? ['подходит', 'good'] :
+                   margin >= 0.67 ? ['на пределе', 'warning'] : ['не подходит', 'serious'];
+    return { ...p, cond, margin, status };
+  });
+  const best = rows.filter(r => r.margin >= 1)[0] || rows[rows.length - 1];
+  document.getElementById('prop-tiles').innerHTML =
+    tile('Напряжение на пропант σ', sigma.toFixed(1), 'МПа', 'P_c − P_заб') +
+    tile('Требуемая проводимость', Math.round(req), 'мД·м', 'C_fD·k·X_f (модуль 2) × запас ' + sf) +
+    tile('Рекомендуемый пропант', best.name, '', best.margin >= 1 ? 'запас ×' + best.margin.toFixed(1) : 'запаса нет — увеличьте массу') +
+    tile('Проводимость выбранного', Math.round(best.cond), 'мД·м');
+  const el = document.getElementById('chart-prop');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: t.series,
+    grid: { left: 8, right: 48, top: 36, bottom: 8, containLabel: true },
+    legend: { ...baseLegend(t) },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => Math.round(v) + ' мД·м' },
+    xAxis: { type: 'value', min: 5, max: 60, name: 'σ, МПа', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'log', name: 'проводимость, мД·м', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false } },
+    series: [
+      ...PROPPANTS.map((p, i) => ({
+        name: p.name, type: 'line', showSymbol: false, lineStyle: { width: 2 },
+        data: Array.from({ length: 56 }, (_, k) => {
+          const s = 5 + k;
+          return [s, +(p.C0 * Math.exp(-s / p.s0)).toFixed(0)];
+        }),
+        ...(i === 0 ? { markLine: {
+          symbol: 'none', silent: true,
+          lineStyle: { color: t.baseline, width: 1 },
+          label: { color: t.ink2, fontSize: 12 },
+          data: [
+            { xAxis: +sigma.toFixed(1), label: { formatter: 'рабочая точка σ = ' + sigma.toFixed(1) } },
+            { yAxis: Math.round(req), label: { formatter: 'требуется ' + Math.round(req), position: 'insideEndTop' } },
+          ],
+        } } : {}),
+      })),
+    ],
+  });
+  fillTable('table-prop', ['Пропант', 'Проводимость при σ, мД·м', 'Запас к требуемой', 'Вердикт'],
+    rows.map(r => [r.name, Math.round(r.cond), '×' + r.margin.toFixed(2), r.status[0]]));
+  return [c];
+}
+
+/* ══════════════════════ DFIT-анализ ══════════════════════ */
+/* G-функция Нолте (приближение малых утечек) */
+function Gfun(dtD) {
+  const g = (4 / 3) * (Math.pow(1 + dtD, 1.5) - Math.pow(dtD, 1.5));
+  return (4 / Math.PI) * (g - 4 / 3);
+}
+/* демо-кривая: нормальные утечки до G=2, затем течение после смыкания */
+function dfitDemoRows() {
+  let s = 7;
+  const noise = () => { s = (s * 9301 + 49297) % 233280; return (s / 233280 - 0.5) * 0.06; };
+  const tp = 5, ISIP = 45.0, mG = 1.5, Gc = 2.0, b = 1.2;
+  const rows = [];
+  for (let t = 0.1; t <= 30; t += 0.1) {
+    const G = Gfun(t / tp);
+    /* до смыкания — нормальные утечки (линейно по G), после — затухающий спад:
+       производная непрерывна в точке смыкания и уходит ниже касательной */
+    const P = G <= Gc
+      ? ISIP - mG * G
+      : ISIP - mG * Gc - mG * b * (1 - Math.exp(-(G - Gc) / b));
+    rows.push({ t: +t.toFixed(2), P: +(P + noise()).toFixed(3) });
+  }
+  return { rows, tp };
+}
+let dfitState = { rows: dfitDemoRows().rows, source: 'демо-данные' };
+
+/* сглаженный наклон y(x) в окне ±win точек */
+function windowSlope(xs, ys, i, win) {
+  const a = Math.max(0, i - win), b = Math.min(xs.length - 1, i + win);
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, n = 0;
+  for (let j = a; j <= b; j++) { sx += xs[j]; sy += ys[j]; sxx += xs[j] * xs[j]; sxy += xs[j] * ys[j]; n++; }
+  const d = n * sxx - sx * sx;
+  return d === 0 ? 0 : (n * sxy - sx * sy) / d;
+}
+
+function analyzeDfit() {
+  const tp = num('d-tp');
+  const rows = dfitState.rows;
+  if (!rows || rows.length < 20) return null;
+  const pts = rows.map(r => ({ t: r.t, P: r.P, G: Gfun(r.t / tp) }));
+  const Gs = pts.map(p => p.G), Ps = pts.map(p => p.P);
+  const win = Math.max(3, Math.round(pts.length / 40));
+  pts.forEach((p, i) => { p.gdpdg = -windowSlope(Gs, Ps, i, win) * p.G; });
+  const ISIP = Math.max(...Ps.slice(0, Math.max(3, win)));
+  /* касательная через начало координат по раннему прямолинейному участку */
+  const early = pts.filter(p => p.G > 0.3 && p.G < 1.0 && p.gdpdg > 0);
+  if (!early.length) return null;
+  const slopes = early.map(p => p.gdpdg / p.G).sort((a, b) => a - b);
+  const m = slopes[Math.floor(slopes.length / 2)];
+  /* смыкание: устойчивое отклонение производной вниз от касательной */
+  let ic = -1;
+  for (let i = 0; i < pts.length - 5; i++) {
+    if (pts[i].G < 1.0) continue;
+    let below = true;
+    for (let j = i; j < i + 5; j++) if (pts[j].gdpdg >= 0.93 * m * pts[j].G) { below = false; break; }
+    if (below) { ic = i; break; }
+  }
+  const c = ic > 0 ? pts[ic] : null;
+  return { pts, ISIP, m, c,
+    eta: c ? c.G / (2 + c.G) : null };
+}
+
+function renderDfit(t) {
+  const a = analyzeDfit();
+  document.getElementById('d-status').textContent =
+    'Источник: ' + dfitState.source + ' · точек: ' + (dfitState.rows ? dfitState.rows.length : 0);
+  if (!a) {
+    document.getElementById('dfit-tiles').innerHTML =
+      '<div class="col-12"><div class="footer-note">Недостаточно данных для анализа (нужно ≥ 20 точек «время, давление»).</div></div>';
+    return [];
+  }
+  const { pts, ISIP, m, c, eta } = a;
+  document.getElementById('dfit-tiles').innerHTML =
+    tile('ISIP', ISIP.toFixed(1), 'МПа') +
+    tile('Давление смыкания P<sub>c</sub>', c ? c.P.toFixed(1) : '—', 'МПа',
+      c ? 'при G = ' + c.G.toFixed(2) : 'смыкание не найдено') +
+    tile('Время смыкания', c ? c.t.toFixed(1) : '—', 'мин', 'после остановки') +
+    tile('Эффективность жидкости', eta ? (eta * 100).toFixed(0) : '—', '%', 'η = G_c / (2 + G_c)');
+
+  /* G-функция: два синхронных грида — P(G) и G·dP/dG(G) с касательной */
+  const el1 = document.getElementById('chart-gfun');
+  echarts.dispose(el1);
+  const c1 = echarts.init(el1);
+  const Gmax = Math.ceil(pts[pts.length - 1].G * 10) / 10;
+  c1.setOption({
+    axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: t.baseline } },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) },
+    grid: [
+      { left: 8, right: 24, top: 30, height: '38%', containLabel: true },
+      { left: 8, right: 24, top: '56%', height: '32%', containLabel: true },
+    ],
+    xAxis: [0, 1].map(i => ({
+      type: 'value', gridIndex: i, min: 0, max: Gmax,
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, show: i === 1 },
+      name: i === 1 ? 'G' : '', nameTextStyle: { color: t.muted },
+    })),
+    yAxis: [
+      { type: 'value', gridIndex: 0, scale: true, name: 'P, МПа',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+      { type: 'value', gridIndex: 1, min: 0, name: 'G·dP/dG, МПа',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+    ],
+    series: [
+      { name: 'P', type: 'line', xAxisIndex: 0, yAxisIndex: 0, showSymbol: false,
+        lineStyle: { width: 2, color: t.series[0] }, itemStyle: { color: t.series[0] },
+        data: pts.map(p => [+p.G.toFixed(3), p.P]),
+        ...(c ? { markPoint: {
+          symbol: 'circle', symbolSize: 10,
+          itemStyle: { color: t.series[0], borderColor: t.surface, borderWidth: 2 },
+          label: { color: t.ink2, fontSize: 12, position: 'right', distance: 8,
+            formatter: 'смыкание: ' + c.P.toFixed(1) + ' МПа' },
+          data: [{ coord: [+c.G.toFixed(3), c.P] }],
+        } } : {}) },
+      { name: 'G·dP/dG', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false,
+        lineStyle: { width: 2, color: t.series[1] }, itemStyle: { color: t.series[1] },
+        data: pts.map(p => [+p.G.toFixed(3), +p.gdpdg.toFixed(3)]) },
+      { name: 'Касательная', type: 'line', xAxisIndex: 1, yAxisIndex: 1, showSymbol: false,
+        lineStyle: { width: 1, color: t.muted, type: 'dashed' }, itemStyle: { color: t.muted },
+        silent: true, data: [[0, 0], [Gmax, m * Gmax]],
+        ...(c ? { markLine: {
+          symbol: 'none', silent: true,
+          lineStyle: { color: t.baseline, width: 1 },
+          label: { color: t.ink2, fontSize: 12, formatter: 'G_c = ' + c.G.toFixed(2) },
+          data: [{ xAxis: +c.G.toFixed(3) }],
+        } } : {}) },
+    ],
+  });
+
+  /* √t */
+  const el2 = document.getElementById('chart-sqrt');
+  echarts.dispose(el2);
+  const c2 = echarts.init(el2);
+  c2.setOption({
+    grid: { left: 8, right: 24, top: 24, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) + ' МПа' },
+    xAxis: { type: 'value', name: '√t, мин^½', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', scale: true, ...baseAxis(t), axisLine: { show: false } },
+    series: [{
+      name: 'P', type: 'line', showSymbol: false,
+      lineStyle: { width: 2, color: t.series[0] }, itemStyle: { color: t.series[0] },
+      data: pts.map(p => [+Math.sqrt(p.t).toFixed(3), p.P]),
+      ...(c ? { markLine: {
+        symbol: 'none', silent: true,
+        lineStyle: { color: t.baseline, width: 1 },
+        label: { color: t.ink2, fontSize: 12, formatter: 'смыкание' },
+        data: [{ xAxis: +Math.sqrt(c.t).toFixed(3) }],
+      } } : {}) }],
+  });
+
+  /* log-log: ΔP и t·dΔP/dt */
+  const el3 = document.getElementById('chart-loglog');
+  echarts.dispose(el3);
+  const c3 = echarts.init(el3);
+  const ll = pts.filter(p => ISIP - p.P > 0.05 && p.t > 0);
+  const lnT = ll.map(p => Math.log(p.t)), dP = ll.map(p => ISIP - p.P);
+  const winL = Math.max(3, Math.round(ll.length / 40));
+  const der = ll.map((p, i) => windowSlope(lnT, dP, i, winL));
+  c3.setOption({
+    color: [t.series[0], t.series[1]],
+    grid: { left: 8, right: 52, top: 36, bottom: 8, containLabel: true },
+    legend: { ...baseLegend(t) },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) + ' МПа' },
+    xAxis: { type: 'log', name: 'Δt, мин', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'log', min: 0.01, ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: v => +v.toPrecision(1) } },
+    series: [
+      { name: 'ΔP = ISIP − P', type: 'line', showSymbol: false, lineStyle: { width: 2 },
+        data: ll.map(p => [p.t, +(ISIP - p.P).toFixed(3)]) },
+      { name: 't·dΔP/dt', type: 'line', showSymbol: false, lineStyle: { width: 2 },
+        data: ll.map((p, i) => [p.t, der[i] > 0.02 ? +der[i].toFixed(3) : null]),
+        ...(c ? { markLine: {
+          symbol: 'none', silent: true,
+          lineStyle: { color: t.baseline, width: 1 },
+          label: { color: t.ink2, fontSize: 12, formatter: 'смыкание' },
+          data: [{ xAxis: c.t }],
+        } } : {}) },
+    ],
+  });
+
+  fillTable('table-dfit', ['Δt, мин', 'P, МПа', 'G', 'G·dP/dG, МПа'],
+    pts.filter((_, i) => i % 20 === 0)
+       .map(p => [p.t.toFixed(1), p.P.toFixed(2), p.G.toFixed(3), p.gdpdg.toFixed(3)]));
+  return [c1, c2, c3];
+}
+
+/* загрузка CSV и демо-данные */
+function parseDfitCsv(text) {
+  const rows = [];
+  text.split(/\r?\n/).forEach(line => {
+    const parts = line.split(/[;,\t]/).map(s => parseFloat(s.replace(',', '.')));
+    if (parts.length >= 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+      rows.push({ t: parts[0], P: parts[1] });
+    }
+  });
+  rows.sort((a, b) => a.t - b.t);
+  return rows.filter(r => r.t > 0);
+}
+
+/* ══════════════════════ пультовая ГРП ══════════════════════ */
+const VAN_PC = 42.5, VAN_LIMIT = 56, VAN_WARN = 54;
+
+/* генератор сценария: полный ряд {t, P, rate, prop}, шаг 0,1 мин */
+function genVanRows(kind) {
+  let s = 11;
+  const noise = () => { s = (s * 9301 + 49297) % 233280; return (s / 233280 - 0.5) * 0.35; };
+  const stopT = kind === 'screenout' ? 76 : 80;
+  const rows = [];
+  let Pstop = null;
+  for (let t = 0; t <= 90; t += 0.1) {
+    let rate, prop, P;
+    rate = t < 5 ? 2 * t : (t < stopT ? 10 + 0.15 * Math.sin(t / 3) : 0);
+    prop = (t >= 20 && t < stopT) ? Math.min(600, 100 + Math.floor((t - 20) / 8) * 80) : 0;
+    if (kind === 'screenout' && t >= 55 && t < stopT) prop = Math.min(760, prop + 8 * (t - 55));
+    if (t < 5)      P = 30 + t / 5 * 27;
+    else if (t < 8) P = 57 - (t - 5) / 3 * 8.5;
+    else if (t < stopT) {
+      let pnet = 5.5 * Math.pow((t - 4) / 10, 0.15);
+      if (kind === 'screenout' && t > 55) pnet += 0.09 * Math.pow(t - 55, 1.4);
+      if (kind === 'height' && t > 50)    pnet -= Math.min(4, 0.45 * (t - 50));
+      P = VAN_PC + pnet;
+      Pstop = P;
+    } else {
+      P = VAN_PC + 2 + (Pstop - VAN_PC - 2) * Math.exp(-(t - stopT) / 7);
+    }
+    rows.push({ t: +t.toFixed(1), P: +(P + noise()).toFixed(2),
+      rate: +rate.toFixed(2), prop: Math.round(prop) });
+  }
+  return { rows, stopT };
+}
+
+const van = {
+  scenario: 'normal', rows: [], stopT: 80, i: 0,
+  timer: null, log: [], flags: {}, cumProp: 0,
+};
+function vanReset() {
+  clearInterval(van.timer); van.timer = null;
+  van.scenario = document.getElementById('v-scn').value;
+  const g = genVanRows(van.scenario);
+  van.rows = g.rows; van.stopT = g.stopT;
+  van.i = 0; van.log = []; van.flags = {}; van.cumProp = 0;
+  vanLogAdd(0, 'good', 'Готово к запуску: сценарий «' +
+    document.getElementById('v-scn').selectedOptions[0].text + '»');
+  if (panes['pane-van'].inited) panes['pane-van'].render(theme());
+}
+function vanLogPaint() {
+  const colors = { good: 'var(--status-good)', warning: 'var(--status-warning)',
+    serious: 'var(--status-serious)', critical: '#d03b3b' };
+  const el = document.getElementById('van-log');
+  if (el) el.innerHTML = van.log.map(e =>
+    '<li class="mb-1"><span style="color:' + colors[e.level] + '">●</span> ' +
+    '<span class="text-body-secondary">[' + e.t.toFixed(1) + ' мин]</span> ' + e.msg + '</li>').join('');
+}
+function vanLogAdd(t, level, msg) {
+  van.log.unshift({ t, level, msg });
+  if (van.log.length > 60) van.log.pop();
+  vanLogPaint();
+}
+
+/* наклон Нолте—Смита: ln(pnet) от ln(t−4) в скользящем окне 10 мин */
+function vanSlope(idx) {
+  const w = [];
+  for (let j = idx; j >= 0 && van.rows[idx].t - van.rows[j].t <= 10; j--) {
+    const r = van.rows[j];
+    if (r.t > 9 && r.rate > 1 && r.P - VAN_PC > 0.3) w.push(r);
+  }
+  if (w.length < 12) return null;
+  const xs = w.map(r => Math.log(r.t - 4)), ys = w.map(r => Math.log(r.P - VAN_PC));
+  return windowSlope(xs, ys, Math.floor(xs.length / 2), xs.length);
+}
+function vanMode(slope) {
+  if (slope === null) return ['ожидание', '', 'good'];
+  if (slope > 0.85)  return ['III — экранирование', 'наклон ' + slope.toFixed(2), 'serious'];
+  if (slope > 0.45)  return ['II→III — рост сопротивления', 'наклон ' + slope.toFixed(2), 'warning'];
+  if (slope > -0.1)  return ['I–II — нормальный рост', 'наклон ' + slope.toFixed(2), 'good'];
+  return ['IV — рост высоты / прорыв', 'наклон ' + slope.toFixed(2), 'serious'];
+}
+
+/* алерты — по факту перехода порога */
+function vanAlerts(idx, slope) {
+  const r = van.rows[idx], f = van.flags;
+  const once = (key, level, msg) => { if (!f[key]) { f[key] = true; vanLogAdd(r.t, level, msg); } };
+  if (r.t >= 0.1) once('start', 'good', 'Закачка начата');
+  if (r.t >= 5.1) once('breakdown', 'good', 'Разрыв пласта: пик ~57 МПа, давление распространения ~48 МПа');
+  if (r.prop > 0) once('prop', 'good', 'Начата подача пропанта');
+  if (slope !== null && slope > 0.85 && r.rate > 1)
+    once('screenout', 'serious', 'Наклон Нолте—Смита ' + slope.toFixed(2) +
+      ' (≈1 и выше) — признак экранирования. Рекомендация: снизить концентрацию пропанта, поднять расход');
+  if (slope !== null && slope < -0.1 && r.rate > 1)
+    once('height', 'serious', 'Падение p_net при постоянном расходе — неконтролируемый рост высоты или прорыв в соседний интервал');
+  /* пик разрыва пласта (t≈5 мин) — не алерт, пороги проверяем после выхода на режим */
+  if (r.t > 10 && r.P >= VAN_WARN && r.rate > 1)
+    once('pwarn', 'warning', 'Давление ' + r.P.toFixed(1) + ' МПа — приближение к пределу колонны (' + VAN_LIMIT + ' МПа)');
+  if (r.t > 10 && r.P >= VAN_LIMIT && r.rate > 1)
+    once('pcrit', 'critical', 'Достигнут предел ' + VAN_LIMIT + ' МПа — аварийная остановка (СТОП)');
+  if (r.rate === 0 && r.t > 5) once('shutin', 'good', 'Насосы остановлены, фиксируем ISIP и кривую падения');
+  if (idx === van.rows.length - 1) once('end', 'good', 'Стадия завершена');
+}
+
+function vanUpdate() {
+  const idx = Math.min(van.i, van.rows.length - 1);
+  const r = van.rows[idx];
+  const revealed = van.rows.slice(0, idx + 1);
+  /* плитки */
+  document.getElementById('van-t').textContent = r.t.toFixed(1);
+  document.getElementById('van-P').textContent = r.P.toFixed(1);
+  document.getElementById('van-rate').textContent = r.rate.toFixed(1);
+  van.cumProp = revealed.reduce((a, x) => a + x.prop * x.rate / 1000 * 0.1, 0);
+  document.getElementById('van-cum').textContent = van.cumProp.toFixed(1);
+  const slope = vanSlope(idx);
+  const [mode, sl, lvl] = vanMode(slope);
+  const colors = { good: 'var(--status-good)', warning: 'var(--status-warning)', serious: 'var(--status-serious)' };
+  document.getElementById('van-mode').innerHTML =
+    '<span style="color:' + colors[lvl] + '">●</span> ' + mode;
+  document.getElementById('van-slope').textContent = sl;
+  vanAlerts(idx, slope);
+  /* графики — обновляем данные существующих инстансов */
+  const cv = echarts.getInstanceByDom(document.getElementById('chart-van'));
+  if (cv) cv.setOption({ series: [
+    { data: revealed.map(x => [x.t, x.P]) },
+    { data: revealed.map(x => [x.t, x.rate]) },
+    { data: revealed.map(x => [x.t, x.prop]) },
+  ] });
+  const cn = echarts.getInstanceByDom(document.getElementById('chart-ns'));
+  if (cn) cn.setOption({ series: [
+    { data: revealed.filter(x => x.t > 9 && x.rate > 1 && x.P - VAN_PC > 0.3)
+        .map(x => [+(x.t - 4).toFixed(1), +(x.P - VAN_PC).toFixed(2)]) },
+  ] });
+}
+
+function renderVan(t) {
+  if (!van.rows.length) vanReset();
+  /* стриминговая кривая ГРП: три синхронные панели с фиксированной осью времени */
+  const el1 = document.getElementById('chart-van');
+  echarts.dispose(el1);
+  const c1 = echarts.init(el1);
+  const panels = [
+    { name: 'Давление (забой)', unit: 'МПа', col: t.series[0], max: 62 },
+    { name: 'Расход', unit: 'м³/мин', col: t.series[1], max: 12 },
+    { name: 'Конц. пропанта', unit: 'кг/м³', col: t.series[2], max: 800 },
+  ];
+  c1.setOption({
+    animation: false,
+    axisPointer: { link: [{ xAxisIndex: 'all' }], lineStyle: { color: t.baseline } },
+    tooltip: { ...baseTooltip(t), trigger: 'axis' },
+    grid: [
+      { left: 8, right: 32, top: 30, height: '32%', containLabel: true },
+      { left: 8, right: 32, top: '45%', height: '19%', containLabel: true },
+      { left: 8, right: 32, top: '71%', height: '19%', containLabel: true },
+    ],
+    xAxis: panels.map((p, i) => ({
+      type: 'value', gridIndex: i, min: 0, max: 90,
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, show: i === 2, formatter: '{value} мин' },
+    })),
+    yAxis: panels.map((p, i) => ({
+      type: 'value', gridIndex: i, max: p.max,
+      name: p.name + ', ' + p.unit,
+      nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+      ...baseAxis(t), axisLine: { show: false },
+    })),
+    series: panels.map((p, i) => ({
+      name: p.name, type: 'line',
+      xAxisIndex: i, yAxisIndex: i, data: [],
+      lineStyle: { width: 2, color: p.col, cap: 'round' },
+      itemStyle: { color: p.col },
+      symbol: 'none', emphasis: { disabled: true },
+      tooltip: { valueFormatter: v => v + ' ' + p.unit },
+      ...(i === 0 ? { markLine: {
+        symbol: 'none', silent: true,
+        lineStyle: { color: t.serious, width: 1, type: 'dashed' },
+        label: { color: t.ink2, fontSize: 11, position: 'insideEndTop',
+          formatter: 'предел колонны ' + VAN_LIMIT + ' МПа' },
+        data: [{ yAxis: VAN_LIMIT }],
+      } } : {}),
+    })),
+  });
+  /* Нолте—Смит: log-log p_net с направляющими наклонов */
+  const el2 = document.getElementById('chart-ns');
+  echarts.dispose(el2);
+  const c2 = echarts.init(el2);
+  c2.setOption({
+    animation: false,
+    grid: { left: 8, right: 48, top: 24, bottom: 8, containLabel: true },
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      valueFormatter: v => (+v).toFixed(2) + ' МПа' },
+    xAxis: { type: 'log', min: 4, max: 90, name: 't − 4, мин', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'log', min: 1, max: 30, name: 'p_net, МПа', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: v => +v.toPrecision(1) } },
+    series: [
+      { name: 'p_net', type: 'line', showSymbol: false,
+        lineStyle: { width: 2, color: t.series[0] }, itemStyle: { color: t.series[0] }, data: [] },
+      { name: 'наклон ~0.15 (норма)', type: 'line', showSymbol: false, silent: true,
+        lineStyle: { width: 1, color: t.muted, type: 'dashed' }, itemStyle: { color: t.muted },
+        data: [[4, 4.6], [90, 4.6 * Math.pow(90 / 4, 0.15)]],
+        endLabel: { show: true, formatter: '0.15', color: t.muted, fontSize: 11 } },
+      { name: 'наклон 1 (экранирование)', type: 'line', showSymbol: false, silent: true,
+        lineStyle: { width: 1, color: t.serious, type: 'dashed' }, itemStyle: { color: t.serious },
+        data: [[40, 6], [90, 6 * 90 / 40]],
+        endLabel: { show: true, formatter: '1', color: t.serious, fontSize: 11 } },
+    ],
+  });
+  vanLogPaint();
+  vanUpdate();
+  return [c1, c2];
+}
+
+/* управление имитацией */
+function vanTick() {
+  const steps = Math.max(1, Math.round(+document.getElementById('v-speed').value / 30));
+  van.i = Math.min(van.i + steps, van.rows.length - 1);
+  vanUpdate();
+  if (van.i >= van.rows.length - 1) { clearInterval(van.timer); van.timer = null; }
+}
+
+/* ══════════════════════ сравнение скважин ══════════════════════ */
+/* синтетический куст: q(t) — гиперболика Арпса, приток по стадиям — со «слабыми» портами */
+const wells = (() => {
+  let s = 21;
+  const rnd2 = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  const defs = [
+    { name: '4568Г', stages: 16, prop: 1520, xf: 155, qi: 505, Di: 0.9,  wc: 71 },
+    { name: '4570Г', stages: 10, prop: 900,  xf: 120, qi: 300, Di: 1.4,  wc: 80 },
+    { name: '4571Г', stages: 12, prop: 1080, xf: 142, qi: 420, Di: 0.85, wc: 62 },
+    { name: '4572Г', stages: 8,  prop: 720,  xf: 128, qi: 330, Di: 0.7,  wc: 58 },
+  ];
+  return defs.map(w => {
+    const monthly = Array.from({ length: 12 }, (_, m) => Math.round(w.qi / (1 + w.Di * (m + 0.5) / 12)));
+    const cum = Math.round(monthly.reduce((a, q) => a + q * 30.44, 0) / 1000); /* тыс. барр./год */
+    const inflow = Array.from({ length: w.stages }, () => 5 + rnd2() * 10);
+    if (w.name === '4570Г') { inflow[3] = 0.8; inflow[7] = 1.2; } /* два неработающих порта */
+    const sum = inflow.reduce((a, b) => a + b, 0);
+    return { ...w, monthly, cum, inflow: inflow.map(v => +(v / sum * 100).toFixed(1)) };
+  });
+})();
+
+function renderCompDecline(t) {
+  const el = document.getElementById('chart-comp-decline');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: t.series,
+    grid: { left: 8, right: 90, top: 36, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'line', lineStyle: { color: t.baseline, width: 1 } },
+      valueFormatter: v => v + ' барр/сут' },
+    xAxis: { type: 'category', data: Array.from({ length: 12 }, (_, m) => (m + 1) + ' мес'),
+      boundaryGap: false, ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 11 } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    series: wells.map(w => ({
+      name: w.name, type: 'line', data: w.monthly,
+      lineStyle: { width: 2, cap: 'round' },
+      symbol: 'circle', symbolSize: 8, showSymbol: false,
+      itemStyle: { borderColor: t.surface, borderWidth: 2 },
+      emphasis: { focus: 'series' },
+      endLabel: { show: true, formatter: w.name, color: t.ink2, fontSize: 12, distance: 8 },
+    })),
+  });
+  fillTable('table-comp-decline', ['Месяц', ...wells.map(w => w.name)],
+    Array.from({ length: 12 }, (_, m) => [(m + 1), ...wells.map(w => w.monthly[m])]));
+  return c;
+}
+
+function renderCompEff(t) {
+  const el = document.getElementById('chart-comp-eff');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  /* две метрики разного масштаба — две панели с общей осью скважин */
+  const perStage = wells.map(w => +(w.cum / w.stages).toFixed(1));
+  const perTon   = wells.map(w => +(w.cum * 1000 / w.prop).toFixed(0));
+  c.setOption({
+    grid: [
+      { left: 8, right: 16, top: 30, height: '32%', containLabel: true },
+      { left: 8, right: 16, top: '62%', height: '32%', containLabel: true },
+    ],
+    tooltip: { ...baseTooltip(t), trigger: 'item',
+      formatter: p => wells[p.dataIndex].name + '<br><b>' + p.value + '</b> ' +
+        (p.seriesIndex === 0 ? 'тыс. барр./стадию' : 'барр./т пропанта') },
+    xAxis: [0, 1].map(i => ({
+      type: 'category', gridIndex: i, data: wells.map(w => w.name),
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 11 },
+    })),
+    yAxis: [
+      { type: 'value', gridIndex: 0, name: 'тыс. барр. / стадию',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+      { type: 'value', gridIndex: 1, name: 'барр. / т пропанта',
+        nameTextStyle: { color: t.ink2, fontSize: 12, align: 'left' },
+        ...baseAxis(t), axisLine: { show: false } },
+    ],
+    series: [
+      { type: 'bar', xAxisIndex: 0, yAxisIndex: 0, barMaxWidth: 22,
+        data: perStage.map((v, i) => ({ value: v, itemStyle: { color: t.series[i], borderRadius: [4, 4, 0, 0] } })),
+        label: { show: true, position: 'top', color: t.ink2, fontSize: 11 } },
+      { type: 'bar', xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 22,
+        data: perTon.map((v, i) => ({ value: v, itemStyle: { color: t.series[i], borderRadius: [4, 4, 0, 0] } })),
+        label: { show: true, position: 'top', color: t.ink2, fontSize: 11 } },
+    ],
+  });
+  return c;
+}
+
+function renderCompStages(t) {
+  const selA = document.getElementById('cmp-a'), selB = document.getElementById('cmp-b');
+  if (!selA.options.length) {
+    wells.forEach((w, i) => {
+      selA.add(new Option('Скважина ' + w.name, i));
+      selB.add(new Option('Скважина ' + w.name, i));
+    });
+    selA.value = 2; selB.value = 1;  /* 4571Г vs 4570Г — контраст с неработающими портами */
+  }
+  const A = wells[+selA.value], B = wells[+selB.value];
+  const n = Math.max(A.stages, B.stages);
+  const el = document.getElementById('chart-comp-stages');
+  echarts.dispose(el);
+  const c = echarts.init(el);
+  c.setOption({
+    color: [t.series[+selA.value], t.series[+selB.value]],
+    grid: { left: 8, right: 8, top: 40, bottom: 8, containLabel: true },
+    legend: baseLegend(t),
+    tooltip: { ...baseTooltip(t), trigger: 'axis',
+      axisPointer: { type: 'shadow', shadowStyle: { opacity: 0.06 } },
+      valueFormatter: v => (v == null ? '—' : v + ' %') },
+    xAxis: { type: 'category', data: Array.from({ length: n }, (_, i) => 'Ст. ' + (i + 1)),
+      ...baseAxis(t), splitLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 10, interval: 0 } },
+    yAxis: { type: 'value', name: 'доля притока, %', nameTextStyle: { color: t.muted },
+      ...baseAxis(t), axisLine: { show: false } },
+    series: [
+      { name: A.name, type: 'bar', barMaxWidth: 12, barGap: '25%',
+        data: Array.from({ length: n }, (_, i) => i < A.stages ? A.inflow[i] : null),
+        itemStyle: { borderRadius: [3, 3, 0, 0] } },
+      { name: B.name, type: 'bar', barMaxWidth: 12,
+        data: Array.from({ length: n }, (_, i) => i < B.stages ? B.inflow[i] : null),
+        itemStyle: { borderRadius: [3, 3, 0, 0] } },
+    ],
+  });
+  return c;
+}
+
+function renderComp(t) {
+  /* паспорт куста: цветовая метка + метрики */
+  document.getElementById('table-wells').innerHTML =
+    '<tr><th>Скважина</th><th>Стадий</th><th>Пропант, т</th><th>Ср. X<sub>f</sub>, м</th>' +
+    '<th>Старт. дебит, барр/сут</th><th>Добыча за год, тыс. барр.</th><th>Обводнённость, %</th></tr>' +
+    wells.map((w, i) =>
+      '<tr><td><span style="color:' + t.series[i] + '">●</span> ' + w.name + '</td>' +
+      '<td>' + w.stages + '</td><td>' + w.prop + '</td><td>' + w.xf + '</td>' +
+      '<td>' + w.qi + '</td><td>' + w.cum + '</td><td>' + w.wc + '</td></tr>').join('');
+  return [renderCompDecline(t), renderCompEff(t), renderCompStages(t)];
+}
+
+/* ══════════════════════ PDF-отчёт ══════════════════════ */
+/* фиксированная светлая палитра — отчёт печатается светлым независимо от темы приложения */
+const REPORT_T = {
+  surface: '#ffffff', ink: '#0b0b0b', ink2: '#52514e', muted: '#898781',
+  grid: '#e1e0d9', baseline: '#c3c2b7', border: 'rgba(11,11,11,0.1)',
+  series: ['#2a78d6', '#1baf7a', '#eda100', '#4a3aa7'],
+};
+function reportChartImg(option) {
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;left:-10000px;top:0;width:720px;height:300px;';
+  document.body.appendChild(div);
+  const c = echarts.init(div);
+  c.setOption(option);
+  const url = c.getDataURL({ pixelRatio: 2, backgroundColor: '#fff' });
+  c.dispose();
+  div.remove();
+  return url;
+}
+function buildReport() {
+  const t = REPORT_T;
+  const geo = calcGeometry(); const g = geo[geo.length - 1];
+  const ufd = calcUFD();
+  const npv = calcNPV();
+  const dfit = analyzeDfit();
+  /* график J_D */
+  const imgJD = reportChartImg({
+    animation: false,
+    title: { text: 'UFD: J_D от C_fD, оптимум', left: 0, textStyle: { color: t.ink2, fontSize: 13 } },
+    grid: { left: 8, right: 40, top: 36, bottom: 8, containLabel: true },
+    xAxis: { type: 'log', min: 0.1, max: 1000, ...baseAxis(t), splitLine: { show: false } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false },
+      axisLabel: { color: t.muted, fontSize: 12, formatter: v => v.toFixed(1) } },
+    series: [{ type: 'line', showSymbol: false, lineStyle: { width: 2, color: t.series[0] },
+      data: ufd.pts.map(p => [p.cfd, +p.JD.toFixed(4)]),
+      markPoint: { symbol: 'circle', symbolSize: 9,
+        itemStyle: { color: t.series[0], borderColor: '#fff', borderWidth: 2 },
+        label: { color: t.ink2, fontSize: 12, position: ufd.best.cfd < 1 ? 'right' : 'top',
+          formatter: 'оптимум' },
+        data: [{ coord: [ufd.best.cfd, +ufd.best.JD.toFixed(4)] }] } }],
+  });
+  /* график NPV */
+  const imgNPV = reportChartImg({
+    animation: false,
+    title: { text: 'NPV от числа стадий, млн $', left: 0, textStyle: { color: t.ink2, fontSize: 13 } },
+    grid: { left: 8, right: 8, top: 36, bottom: 8, containLabel: true },
+    xAxis: { type: 'category', data: npv.res.map(x => x.N), ...baseAxis(t),
+      splitLine: { show: false }, axisLabel: { color: t.muted, fontSize: 11 } },
+    yAxis: { type: 'value', ...baseAxis(t), axisLine: { show: false } },
+    series: [{ type: 'bar', barMaxWidth: 16, data: npv.res.map(x => +x.npv.toFixed(2)),
+      itemStyle: { color: t.series[0], borderRadius: [3, 3, 0, 0] } }],
+  });
+  const fmtRow = cells => '<tr>' + cells.map(c => '<td>' + c + '</td>').join('') + '</tr>';
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">
+<title>Отчёт — дизайн и мониторинг ГРП</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #0b0b0b;
+    max-width: 800px; margin: 24px auto; padding: 0 16px; font-size: 14px; }
+  h1 { font-size: 22px; } h2 { font-size: 16px; margin-top: 28px; }
+  .meta { color: #52514e; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+  td, th { border-bottom: 1px solid #e1e0d9; padding: 5px 10px; text-align: right; }
+  td:first-child, th:first-child { text-align: left; }
+  th { color: #52514e; font-weight: 500; }
+  img { max-width: 100%; }
+  .note { color: #898781; font-size: 12px; margin-top: 24px; }
+  .print-btn { padding: 8px 18px; font-size: 14px; margin: 12px 0; cursor: pointer; }
+  @media print { .print-btn { display: none; } }
+</style></head><body>
+<h1>🛢 Отчёт: дизайн и мониторинг ГРП — скважина 4571Г</h1>
+<div class="meta">Сформирован: ${new Date().toLocaleString('ru-RU')} · НефтеМониторинг (демо-макет, данные синтетические)</div>
+<button class="print-btn" onclick="window.print()">🖨 Печать / сохранить в PDF</button>
+
+<h2>1. Геометрия трещины (PKN / KGD)</h2>
+<table>
+<tr><th>Модель</th><th>Полудлина X_f, м</th><th>Ширина у ствола, мм</th></tr>
+${fmtRow(['PKN', Math.round(g.xfp), g.wp.toFixed(1)])}
+${fmtRow(['KGD', Math.round(g.xfk), g.wk.toFixed(1)])}
+</table>
+
+<h2>2. Оптимальная геометрия (Unified Fracture Design)</h2>
+<table>
+<tr><th>N_p</th><th>Оптимум C_fD</th><th>X_f опт, м</th><th>w опт, мм</th><th>J_D</th></tr>
+${fmtRow([ufd.Np.toFixed(2), ufd.best.cfd.toFixed(1), Math.round(ufd.best.xf), ufd.best.w.toFixed(1), ufd.best.JD.toFixed(3)])}
+</table>
+<img src="${imgJD}" alt="J_D vs C_fD">
+
+<h2>3. Экономика: оптимум числа стадий</h2>
+<table>
+<tr><th>Оптимум стадий</th><th>NPV, млн $</th><th>Добыча за горизонт, тыс. барр.</th><th>Стартовый дебит, барр/сут</th></tr>
+${fmtRow([npv.best.N, npv.best.npv.toFixed(1), Math.round(npv.best.cum), Math.round(npv.best.qi)])}
+</table>
+<img src="${imgNPV}" alt="NPV vs N">
+
+<h2>4. DFIT (мини-ГРП)</h2>
+${dfit ? `<table>
+<tr><th>ISIP, МПа</th><th>P смыкания, МПа</th><th>G_c</th><th>Время смыкания, мин</th><th>Эффективность жидкости</th></tr>
+${fmtRow([dfit.ISIP.toFixed(1), dfit.c ? dfit.c.P.toFixed(1) : '—', dfit.c ? dfit.c.G.toFixed(2) : '—',
+          dfit.c ? dfit.c.t.toFixed(1) : '—', dfit.eta ? (dfit.eta * 100).toFixed(0) + ' %' : '—'])}
+</table>` : '<div class="meta">Данные DFIT не загружены.</div>'}
+
+<h2>5. Скважины куста 45</h2>
+<table>
+<tr><th>Скважина</th><th>Стадий</th><th>Пропант, т</th><th>Ср. X_f, м</th><th>Старт. дебит, барр/сут</th><th>Добыча за год, тыс. барр.</th></tr>
+${wells.map(x => fmtRow([x.name, x.stages, x.prop, x.xf, x.qi, x.cum])).join('')}
+</table>
+
+<div class="note">Модели упрощённые, учебные: ширина трещины — решения без утечек (Нордгрен, Гертсма—де Клерк),
+оптимум — по псевдоскин-корреляции Синко-Лея, экономика — гиперболика Арпса с интерференцией стадий,
+смыкание — метод касательной на G-функции Нолте. Построено на Apache ECharts и Bootstrap 5.</div>
+</body></html>`);
+  w.document.close();
+}
+
+/* ══════════════════════ таблицы ══════════════════════ */
+function fillTable(id, header, rows) {
+  document.getElementById(id).innerHTML =
+    '<tr>' + header.map(h => '<th>' + h + '</th>').join('') + '</tr>' +
+    rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('');
+}
+fillTable('table-regions', ['Год', ...regions.map(r => r.name)],
+  years.map((y, i) => [y, ...regions.map(r => r.data[i])]));
+fillTable('table-methods', ['Год', ...methods.map(m => m.name)],
+  methodYears.map((y, i) => [y, ...methods.map(m => m.data[i] + ' %')]));
+fillTable('table-fields', ['Месторождение', 'тыс. барр./сут'],
+  [...fields].reverse().map(f => [f.name, f.value]));
+fillTable('table-treatment', ['t, мин', 'Давление, МПа', 'Расход, м³/мин', 'Пропант, кг/м³'],
+  treatment.filter(r => r[0] % 10 === 0).map(r => r));
+fillTable('table-inflow', ['Стадия', 'Приток, %'],
+  inflow.map((v, i) => ['Стадия ' + (i + 1), v]));
+fillTable('table-globe', ['Месторождение', 'млн барр./сут'],
+  [...worldFields].sort((a, b) => b.v - a.v).map(f => [f.name, f.v]));
+
+/* ══════════════════════ вкладки и жизненный цикл ══════════════════════ */
+const panes = {
+  'pane-production': { inited: false, charts: [], render(t) {
+    this.charts = [renderRegions(t), renderMethods(t), renderFields(t)];
+  } },
+  'pane-frac': { inited: false, charts: [], render(t) {
+    this.charts = [renderTreatment(t), renderMicroseismic(t), renderInflow(t), renderXf(t)];
+  } },
+  'pane-3d': { inited: false, charts: [], render(t) {
+    this.charts = [renderMs3d(t), renderSurface(t), renderGauge(t), renderDrops(t),
+                   renderBar3d(t), renderTraj(t), renderGlobe(t)];
+  } },
+  'pane-calc': { inited: false, charts: [], render(t) {
+    this.charts = [...renderGeo(t), ...renderUFD(t), ...renderNPV(t), ...renderProppant(t)];
+  } },
+  'pane-dfit': { inited: false, charts: [], render(t) {
+    this.charts = renderDfit(t);
+  } },
+  'pane-van': { inited: false, charts: [], render(t) {
+    this.charts = renderVan(t);
+  } },
+  'pane-comp': { inited: false, charts: [], render(t) {
+    this.charts = renderComp(t);
+  } },
+};
+function activePaneId() {
+  return document.querySelector('.tab-pane.active').id;
+}
+function rerenderVisible() {
+  const id = activePaneId();
+  Object.entries(panes).forEach(([k, p]) => { if (k !== id) p.inited = false; });
+  panes[id].render(theme());
+  panes[id].inited = true;
+}
+rerenderVisible();
+
+document.querySelectorAll('[data-bs-toggle="pill"]').forEach(btn => {
+  btn.addEventListener('shown.bs.tab', e => {
+    const id = e.target.getAttribute('data-bs-target').slice(1);
+    if (!panes[id].inited) { panes[id].render(theme()); panes[id].inited = true; }
+    else panes[id].charts.forEach(c => c.resize());
+    /* синхронизируем активный пункт между боковой и мобильной навигацией */
+    document.querySelectorAll('[data-bs-toggle="pill"]').forEach(b =>
+      b.classList.toggle('active', b.getAttribute('data-bs-target') === '#' + id));
+  });
+});
+
+/* пересчёт прогноза при изменении инпутов */
+document.getElementById('fracForm').addEventListener('input', () => {
+  const t = theme();
+  const p = panes['pane-frac'];
+  p.charts[3] = renderXf(t);
+});
+document.getElementById('fracForm').addEventListener('submit', e => e.preventDefault());
+
+/* пересчёт калькулятора при изменении любого инпута своего модуля;
+   подбор пропанта зависит от оптимума UFD, поэтому обновляется вместе с ним */
+[['geoForm', [[0, renderGeo]]],
+ ['ufdForm', [[2, renderUFD], [5, renderProppant]]],
+ ['npvForm', [[3, renderNPV]]],
+ ['propForm', [[5, renderProppant]]]]
+.forEach(([id, parts]) => {
+  const form = document.getElementById(id);
+  form.addEventListener('submit', e => e.preventDefault());
+  form.addEventListener('input', () => {
+    const p = panes['pane-calc'];
+    if (!p.inited) return;
+    parts.forEach(([offset, fn]) => {
+      const fresh = fn(theme());
+      p.charts.splice(offset, fresh.length, ...fresh);  /* заменяем пересозданные инстансы в реестре */
+    });
+  });
+});
+
+/* DFIT: загрузка файла, демо-данные, изменение tp */
+function refreshDfit() {
+  const p = panes['pane-dfit'];
+  if (p.inited) p.charts = renderDfit(theme());
+}
+document.getElementById('dfitForm').addEventListener('submit', e => e.preventDefault());
+document.getElementById('d-tp').addEventListener('input', refreshDfit);
+document.getElementById('d-demo').addEventListener('click', () => {
+  dfitState = { rows: dfitDemoRows().rows, source: 'демо-данные' };
+  document.getElementById('d-file').value = '';
+  refreshDfit();
+});
+document.getElementById('d-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseDfitCsv(String(reader.result));
+    dfitState = { rows, source: file.name };
+    refreshDfit();
+  };
+  reader.readAsText(file);
+});
+
+/* пультовая: управление имитацией */
+document.getElementById('vanForm').addEventListener('submit', e => e.preventDefault());
+document.getElementById('v-start').addEventListener('click', () => {
+  if (!van.timer && van.rows.length) {
+    if (van.i >= van.rows.length - 1) vanReset();
+    van.timer = setInterval(vanTick, 200);
+  }
+});
+document.getElementById('v-pause').addEventListener('click', () => {
+  clearInterval(van.timer); van.timer = null;
+});
+document.getElementById('v-reset').addEventListener('click', vanReset);
+document.getElementById('v-scn').addEventListener('change', vanReset);
+document.getElementById('v-export').addEventListener('click', () => {
+  const rows = van.rows.slice(0, van.i + 1);
+  const csv = 't_min,P_MPa,rate_m3min,prop_kgm3\n' +
+    rows.map(r => [r.t, r.P, r.rate, r.prop].join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'frac-stage-realtime.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* PDF-отчёт из верхнего навбара */
+document.getElementById('navReport').addEventListener('click', e => {
+  e.preventDefault();
+  buildReport();
+});
+
+/* сравнение: выбор пары скважин для постадийного графика */
+document.getElementById('compForm').addEventListener('submit', e => e.preventDefault());
+['cmp-a', 'cmp-b'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  const p = panes['pane-comp'];
+  if (p.inited) p.charts.splice(2, 1, renderCompStages(theme()));
+}));
+
+window.addEventListener('resize', () => panes[activePaneId()].charts.forEach(c => c.resize()));
+</script>
+</body>
+</html>
